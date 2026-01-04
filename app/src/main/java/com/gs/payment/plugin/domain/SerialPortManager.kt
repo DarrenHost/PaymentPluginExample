@@ -3,6 +3,7 @@ package com.gs.payment.plugin.domain
 import com.gs.payment.plugin.utils.Logger
 import com.ok.serialport.OkSerialPort
 import com.ok.serialport.data.Request
+import com.ok.serialport.data.ResponseRule
 import com.ok.serialport.listener.OnConnectListener
 import com.ok.serialport.listener.OnDataListener
 
@@ -35,6 +36,11 @@ class SerialPortManager {
             .baudRate(baudRate)
             .sendInterval(200)
             .stickPacketHandle(StickPacketHandle())
+            .addResponseRule(object : ResponseRule {
+                override fun match(request: Request?, receive: ByteArray): Boolean {
+                    return receive[1] == 0xE0.toByte()
+                }
+            })
             .build()
 
         serialClient?.addConnectListener(object : OnConnectListener {
@@ -44,7 +50,11 @@ class SerialPortManager {
 
             override fun onDisconnect(devicePath: String, errorMag: Throwable?) {
                 if (errorMag != null) {
-                    Logger.e("SerialPortManager", "串口${devicePath}连接失败：${errorMag.message}", errorMag)
+                    Logger.e(
+                        "SerialPortManager",
+                        "串口${devicePath}连接失败：${errorMag.message}",
+                        errorMag
+                    )
                 } else {
                     Logger.e("SerialPortManager", "串口${devicePath}连接失败")
                 }
