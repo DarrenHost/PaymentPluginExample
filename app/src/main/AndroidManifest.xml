@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="${permissionName}" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application
         android:name=".PaymentApplication"
@@ -53,6 +55,21 @@
                 <action android:name="com.coffeeji.payment.plugin.MAKE_STATE_ACTION" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".service.PaymentService"
+            android:enabled="true"
+            android:exported="false" />
     </application>
 
 </manifest>

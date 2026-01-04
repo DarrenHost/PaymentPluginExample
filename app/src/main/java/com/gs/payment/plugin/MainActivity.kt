@@ -1,12 +1,24 @@
 package com.gs.payment.plugin
 
+import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.await
+import com.gs.payment.plugin.service.PaymentService
+import com.gs.payment.plugin.work.MonitoringWorker
+import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +60,7 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     companion object {
+        private const val TAG = "MainActivity"
         const val LOG_ACTION = "com.gs.payment.plugin.LOG_ACTION"
         const val LOG_MESSAGE_KEY = "LOG_MESSAGE_KEY"
     }
@@ -77,6 +90,12 @@ class MainActivity : ComponentActivity() {
         }
         val filter = IntentFilter(LOG_ACTION)
         registerReceiver(receiver, filter)
+        
+        // 启动PaymentService（如果未启动）
+        startPaymentServiceIfNeeded()
+        
+        // 启动MonitoringWorker（如果未启动）
+        startMonitoringWorkerIfNeeded()
     }
 
     override fun onDestroy() {
@@ -93,6 +112,83 @@ class MainActivity : ComponentActivity() {
 
     fun clearLogMessages() {
         logState?.clear()
+    }
+
+    /**
+     * 启动PaymentService（如果未启动）
+     */
+    private fun startPaymentServiceIfNeeded() {
+        if (!isPaymentServiceRunning()) {
+            Log.i(TAG, "PaymentService未运行，启动服务")
+            PaymentService.start(this)
+        } else {
+            Log.i(TAG, "PaymentService已在运行")
+        }
+    }
+
+    /**
+     * 检查PaymentService是否在运行
+     */
+    private fun isPaymentServiceRunning(): Boolean {
+        return try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val runningServices = activityManager.getRunningServices(Integer.MAX_VALUE)
+            val serviceClassName = PaymentService::class.java.name
+            runningServices.any { serviceInfo ->
+                serviceInfo.service.className == serviceClassName
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "检查PaymentService运行状态异常", e)
+            false
+        }
+    }
+
+    /**
+     * 启动MonitoringWorker（如果未启动）
+     */
+    private fun startMonitoringWorkerIfNeeded() {
+        lifecycleScope.launch {
+            try {
+                val workManager = WorkManager.getInstance(this@MainActivity)
+                val workInfos = workManager.getWorkInfosForUniqueWork("payment_service_monitoring").await()
+                
+                val isRunning = workInfos.any { workInfo ->
+                    workInfo.state == WorkInfo.State.RUNNING || 
+                    workInfo.state == WorkInfo.State.ENQUEUED
+                }
+                
+                if (!isRunning) {
+                    Log.i(TAG, "MonitoringWorker未运行，启动监控任务")
+                    startMonitoringWorker()
+                } else {
+                    Log.i(TAG, "MonitoringWorker已在运行")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "检查MonitoringWorker运行状态异常，尝试启动", e)
+                startMonitoringWorker()
+            }
+        }
+    }
+
+    /**
+     * 启动MonitoringWorker监控任务
+     */
+    private fun startMonitoringWorker() {
+        try {
+            // 每15分钟检查一次PaymentService是否在运行
+            val request = PeriodicWorkRequestBuilder<MonitoringWorker>(
+                15, TimeUnit.MINUTES
+            ).setInitialDelay(30, TimeUnit.SECONDS).build()
+
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "payment_service_monitoring",
+                ExistingPeriodicWorkPolicy.KEEP,
+                request
+            )
+            Log.i(TAG, "启动MonitoringWorker监控任务")
+        } catch (e: Exception) {
+            Log.e(TAG, "启动MonitoringWorker失败", e)
+        }
     }
 
     /**

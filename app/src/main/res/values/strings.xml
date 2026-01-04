@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">PaymentPluginExample</string>
+    <string name="payment_service_running">支付服务运行中</string>
+    <string name="payment_service_task_running">支付服务正在运行</string>
+    <string name="payment_service_channel_name">支付服务通道</string>
+    <string name="payment_service_channel_description">支付服务通知通道</string>
 </resources>
