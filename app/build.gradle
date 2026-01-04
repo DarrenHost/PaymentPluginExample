@@ -79,6 +79,7 @@ dependencies {
     implementation libs.ok.serialport
     implementation libs.work
     implementation libs.work.ktx
+    implementation libs.xlog
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core

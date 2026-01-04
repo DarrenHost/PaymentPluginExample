@@ -6,8 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
+import com.gs.payment.plugin.utils.Logger
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -119,10 +119,10 @@ class MainActivity : ComponentActivity() {
      */
     private fun startPaymentServiceIfNeeded() {
         if (!isPaymentServiceRunning()) {
-            Log.i(TAG, "PaymentService未运行，启动服务")
+            Logger.i(TAG, "PaymentService未运行，启动服务")
             PaymentService.start(this)
         } else {
-            Log.i(TAG, "PaymentService已在运行")
+            Logger.i(TAG, "PaymentService已在运行")
         }
     }
 
@@ -138,7 +138,7 @@ class MainActivity : ComponentActivity() {
                 serviceInfo.service.className == serviceClassName
             }
         } catch (e: Exception) {
-            Log.e(TAG, "检查PaymentService运行状态异常", e)
+            Logger.e(TAG, "检查PaymentService运行状态异常", e)
             false
         }
     }
@@ -158,13 +158,13 @@ class MainActivity : ComponentActivity() {
                 }
                 
                 if (!isRunning) {
-                    Log.i(TAG, "MonitoringWorker未运行，启动监控任务")
+                    Logger.i(TAG, "MonitoringWorker未运行，启动监控任务")
                     startMonitoringWorker()
                 } else {
-                    Log.i(TAG, "MonitoringWorker已在运行")
+                    Logger.i(TAG, "MonitoringWorker已在运行")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "检查MonitoringWorker运行状态异常，尝试启动", e)
+                Logger.e(TAG, "检查MonitoringWorker运行状态异常，尝试启动", e)
                 startMonitoringWorker()
             }
         }
@@ -185,9 +185,9 @@ class MainActivity : ComponentActivity() {
                 ExistingPeriodicWorkPolicy.KEEP,
                 request
             )
-            Log.i(TAG, "启动MonitoringWorker监控任务")
+            Logger.i(TAG, "启动MonitoringWorker监控任务")
         } catch (e: Exception) {
-            Log.e(TAG, "启动MonitoringWorker失败", e)
+            Logger.e(TAG, "启动MonitoringWorker失败", e)
         }
     }
 
