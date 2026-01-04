@@ -1,6 +1,6 @@
 package com.gs.payment.plugin.domain
 
-import android.util.Log
+import com.gs.payment.plugin.utils.Logger
 import com.ok.serialport.OkSerialPort
 import com.ok.serialport.data.Request
 import com.ok.serialport.listener.OnConnectListener
@@ -39,21 +39,25 @@ class SerialPortManager {
 
         serialClient?.addConnectListener(object : OnConnectListener {
             override fun onConnect(devicePath: String) {
-                Log.i("SerialPortManager", "串口${devicePath}连接成功")
+                Logger.i("SerialPortManager", "串口${devicePath}连接成功")
             }
 
             override fun onDisconnect(devicePath: String, errorMag: Throwable?) {
-                Log.e("SerialPortManager", "串口${devicePath}连接失败：${errorMag?.message}")
+                if (errorMag != null) {
+                    Logger.e("SerialPortManager", "串口${devicePath}连接失败：${errorMag.message}", errorMag)
+                } else {
+                    Logger.e("SerialPortManager", "串口${devicePath}连接失败")
+                }
             }
         })
 
         serialClient?.addDataListener(object : OnDataListener {
             override fun onRequest(data: ByteArray) {
-                Log.d("SerialPortManager", "发送数据: ${bytesToHex(data)}")
+                Logger.d("SerialPortManager", "发送数据: ${bytesToHex(data)}")
             }
 
             override fun onResponse(data: ByteArray) {
-                Log.d("SerialPortManager", "接收数据: ${bytesToHex(data)}")
+                Logger.d("SerialPortManager", "接收数据: ${bytesToHex(data)}")
             }
         })
 
@@ -79,7 +83,7 @@ class SerialPortManager {
             val request = Request(data)
             serialClient?.request(request)
         } else {
-            Log.w("SerialPortManager", "串口未连接，无法发送数据")
+            Logger.w("SerialPortManager", "串口未连接，无法发送数据")
         }
     }
 

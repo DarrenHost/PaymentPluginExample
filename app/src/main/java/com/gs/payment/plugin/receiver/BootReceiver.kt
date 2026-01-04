@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import com.gs.payment.plugin.utils.Logger
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -25,12 +25,12 @@ class BootReceiver : BroadcastReceiver() {
             if (context == null) {
                 return
             }
-            Log.i("BootReceiver", "开机启动，等待10秒后启动服务")
+            Logger.i("BootReceiver", "开机启动，等待10秒后启动服务")
 
             // 延时10秒启动PaymentService
             Handler(Looper.getMainLooper()).postDelayed({
                 PaymentService.start(context)
-                Log.i("BootReceiver", "开机后延时10秒启动PaymentService")
+                Logger.i("BootReceiver", "开机后延时10秒启动PaymentService")
             }, 10000)
 
             // 启动WorkManager周期性检查任务
@@ -49,6 +49,6 @@ class BootReceiver : BroadcastReceiver() {
             ExistingPeriodicWorkPolicy.KEEP,
             request
         )
-        Log.i("BootReceiver", "启动MonitoringWorker监控任务")
+        Logger.i("BootReceiver", "启动MonitoringWorker监控任务")
     }
 }

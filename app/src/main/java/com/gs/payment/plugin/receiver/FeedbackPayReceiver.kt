@@ -2,7 +2,7 @@ package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
-import android.util.Log
+import com.gs.payment.plugin.utils.Logger
 
 class FeedbackPayReceiver : BaseBroadReceiver() {
 
@@ -14,16 +14,16 @@ class FeedbackPayReceiver : BaseBroadReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        Log.i(TAG, "Received intent action: ${intent.action}")
+        Logger.i(TAG, "Received intent action: ${intent.action}")
         log( "Received intent action: ${intent.action}")
         if (intent.action != ACTION) return
 
         val orderId = intent.getStringExtra("ORDER_ID")
         val orderMoney = intent.getStringExtra("ORDER_MONEY")
         val state = intent.getStringExtra("STATE")
-        Log.i(TAG, "MAKE_STATE_ACTION received. ORDER_ID=${orderId}")
-        Log.i(TAG, "MAKE_STATE_ACTION received. ORDER_MONEY=${orderMoney}")
-        Log.i(TAG, "MAKE_STATE_ACTION received. STATE=${state}")
+        Logger.i(TAG, "MAKE_STATE_ACTION received. ORDER_ID=${orderId}")
+        Logger.i(TAG, "MAKE_STATE_ACTION received. ORDER_MONEY=${orderMoney}")
+        Logger.i(TAG, "MAKE_STATE_ACTION received. STATE=${state}")
 
         log( "MAKE_STATE_ACTION received. ORDER_ID=${orderId}")
         log( "MAKE_STATE_ACTION received. ORDER_MONEY=${orderMoney}")

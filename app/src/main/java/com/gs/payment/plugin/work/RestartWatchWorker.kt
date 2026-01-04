@@ -4,8 +4,8 @@ import android.app.ActivityManager
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import android.util.Log
 import com.gs.payment.plugin.service.PaymentService
+import com.gs.payment.plugin.utils.Logger
 
 /**
  * 重启服务的Worker
@@ -20,17 +20,17 @@ class RestartWatchWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            Log.i("RestartWatchWorker", "应用关闭后启动服务")
+            Logger.i("RestartWatchWorker", "应用关闭后启动服务")
 
             if (isServiceRunning()) {
-                Log.i("RestartWatchWorker", "PaymentService正在运行")
+                Logger.i("RestartWatchWorker", "PaymentService正在运行")
             } else {
-                Log.w("RestartWatchWorker", "PaymentService未运行，尝试重新启动")
+                Logger.w("RestartWatchWorker", "PaymentService未运行，尝试重新启动")
                 PaymentService.start(context)
             }
             Result.success()
         } catch (e: Exception) {
-            Log.e("RestartWatchWorker", "应用关闭后启动服务失败", e)
+            Logger.e("RestartWatchWorker", "应用关闭后启动服务失败", e)
             Result.failure()
         }
     }
@@ -49,7 +49,7 @@ class RestartWatchWorker(
                 serviceInfo.service.className == serviceClassName
             }
         } catch (e: Exception) {
-            Log.e("RestartWatchWorker", "检查服务运行状态异常", e)
+            Logger.e("RestartWatchWorker", "检查服务运行状态异常", e)
             false
         }
     }

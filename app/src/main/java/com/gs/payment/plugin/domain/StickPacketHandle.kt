@@ -1,6 +1,6 @@
 package com.gs.payment.plugin.domain
 
-import android.util.Log
+import com.gs.payment.plugin.utils.Logger
 import com.ok.serialport.stick.AbsStickPacketHandle
 import java.io.EOFException
 import java.io.IOException
@@ -88,7 +88,7 @@ class StickPacketHandle : AbsStickPacketHandle {
                 for (i in dataBuffer.indices) {
                     discardedData[i] = dataBuffer[i]
                 }
-                Log.w(TAG, "未找到包头，丢弃数据: ${bytesToHex(discardedData)}")
+                Logger.w(TAG, "未找到包头，丢弃数据: ${bytesToHex(discardedData)}")
                 dataBuffer.clear()
                 return null
             }
@@ -99,7 +99,7 @@ class StickPacketHandle : AbsStickPacketHandle {
                 for (i in 0 until headerIndex) {
                     discardedData[i] = dataBuffer[i]
                 }
-                Log.w(TAG, "包头前存在无效数据，丢弃: ${bytesToHex(discardedData)}")
+                Logger.w(TAG, "包头前存在无效数据，丢弃: ${bytesToHex(discardedData)}")
                 repeat(headerIndex) { dataBuffer.removeAt(0) }
             }
             
@@ -119,7 +119,7 @@ class StickPacketHandle : AbsStickPacketHandle {
             if (packetSize > MAX_PACKET_SIZE) {
                 // 数据包长度异常，丢弃包头，继续查找下一个包头
                 val discardedByte = dataBuffer[0]
-                Log.w(TAG, "数据包长度异常($packetSize > $MAX_PACKET_SIZE)，丢弃包头: ${bytesToHex(byteArrayOf(discardedByte))}")
+                Logger.w(TAG, "数据包长度异常($packetSize > $MAX_PACKET_SIZE)，丢弃包头: ${bytesToHex(byteArrayOf(discardedByte))}")
                 dataBuffer.removeAt(0)
                 continue
             }
@@ -143,7 +143,7 @@ class StickPacketHandle : AbsStickPacketHandle {
                 return packet
             } else {
                 // 校验失败，丢弃包头，继续查找下一个包头
-                Log.w(TAG, "校验和验证失败，丢弃数据包: ${bytesToHex(packet)}")
+                Logger.w(TAG, "校验和验证失败，丢弃数据包: ${bytesToHex(packet)}")
                 dataBuffer.removeAt(0)
                 continue
             }

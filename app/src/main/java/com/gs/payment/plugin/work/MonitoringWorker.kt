@@ -4,8 +4,8 @@ import android.app.ActivityManager
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import android.util.Log
 import com.gs.payment.plugin.service.PaymentService
+import com.gs.payment.plugin.utils.Logger
 
 /**
  * 监控服务运行状态的Worker
@@ -20,11 +20,11 @@ class MonitoringWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            Log.i("MonitoringWorker", "开始检查PaymentService运行状态")
+            Logger.i("MonitoringWorker", "开始检查PaymentService运行状态")
             checkService()
             Result.success()
         } catch (e: Exception) {
-            Log.e("MonitoringWorker", "检查服务运行状态失败", e)
+            Logger.e("MonitoringWorker", "检查服务运行状态失败", e)
             Result.failure()
         }
     }
@@ -35,13 +35,13 @@ class MonitoringWorker(
     private fun checkService() {
         try {
             if (isServiceRunning()) {
-                Log.i("MonitoringWorker", "PaymentService正在运行")
+                Logger.i("MonitoringWorker", "PaymentService正在运行")
             } else {
-                Log.w("MonitoringWorker", "PaymentService未运行，尝试重新启动")
+                Logger.w("MonitoringWorker", "PaymentService未运行，尝试重新启动")
                 PaymentService.start(applicationContext)
             }
         } catch (e: Exception) {
-            Log.e("MonitoringWorker", "检查服务运行状态失败", e)
+            Logger.e("MonitoringWorker", "检查服务运行状态失败", e)
         }
     }
 
@@ -59,7 +59,7 @@ class MonitoringWorker(
                 serviceInfo.service.className == serviceClassName
             }
         } catch (e: Exception) {
-            Log.e("MonitoringWorker", "检查服务运行状态异常", e)
+            Logger.e("MonitoringWorker", "检查服务运行状态异常", e)
             false
         }
     }
