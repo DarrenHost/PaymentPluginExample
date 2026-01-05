@@ -84,9 +84,6 @@ class StartPayReceiver : BaseBroadReceiver() {
             amount = amount,
             timeout = 60,
             action = { success, message ->
-                val resultMessage = message ?: "支付指令发送成功"
-                Logger.i(TAG, "支付指令发送成功: $resultMessage")
-                log("支付指令发送成功: $resultMessage")
                 if (success) {
                     Logger.e(TAG, "等待支付结果")
                     log("等待支付结果")
@@ -94,7 +91,7 @@ class StartPayReceiver : BaseBroadReceiver() {
                         Logger.i(TAG, "收到支付结果: $isSuccess")
                         log("收到支付结果: $isSuccess")
                         if (isSuccess) {
-                            sendResult(context, true, resultMessage, orderMoney)
+                            sendResult(context, true, "支付成功", orderMoney)
                         } else {
                             sendResult(context, false, msg ?: "支付失败", orderMoney)
                         }
@@ -110,8 +107,6 @@ class StartPayReceiver : BaseBroadReceiver() {
 
         try {
             SerialPortManager.send(request)
-            Logger.i(TAG, "支付指令已发送到串口")
-            log("支付指令已发送到串口")
         } catch (e: Exception) {
             Logger.e(TAG, "发送支付指令异常", e)
             log("发送支付指令异常: ${e.message}")

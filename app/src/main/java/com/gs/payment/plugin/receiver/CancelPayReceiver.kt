@@ -39,8 +39,8 @@ class CancelPayReceiver : BaseBroadReceiver() {
 
         try {
             SerialPortManager.send(request)
-            Logger.i(TAG, "取消支付指令已发送到串口")
-            log("取消支付指令已发送到串口")
+            Logger.i(TAG, "取消支付指令已发送")
+            log("取消支付指令已发送")
         } catch (e: Exception) {
             Logger.e(TAG, "取消发送支付指令异常", e)
             log("取消发送支付指令异常: ${e.message}")

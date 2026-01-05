@@ -25,7 +25,7 @@ class LogFileNameGenerator : FileNameGenerator {
     override fun generateFileName(logLevel: Int, timestamp: Long): String {
         val sdf = mLocalDateFormat.get()
         sdf.timeZone = TimeZone.getDefault()
-        return sdf.format(Date(timestamp)) + ".txt"
+        return "zsh-" + sdf.format(Date(timestamp)) + ".txt"
     }
 }
 

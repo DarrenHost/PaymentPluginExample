@@ -1,6 +1,7 @@
 package com.gs.payment.plugin
 
 import android.app.Application
+import android.os.Environment
 import com.elvishew.xlog.LogConfiguration
 import com.elvishew.xlog.LogLevel
 import com.elvishew.xlog.XLog
@@ -50,8 +51,8 @@ class PaymentApplication : Application() {
      * 获取日志文件路径
      */
     private fun getLogPath(): String {
-        val cacheDir = getExternalFilesDir(null) ?: filesDir
-        val logDir = File(cacheDir, "Log")
+        val path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/A_GSWYData/PaymentPlugin"
+        val logDir = File(path)
         if (!logDir.exists()) {
             logDir.mkdirs()
         }
