@@ -32,7 +32,7 @@ class PaymentApplication : Application() {
             .logLevel(LogLevel.ALL) // 指定日志级别，低于该级别的日志将不会被打印，默认为 LogLevel.ALL
             .tag("PaymentPlugin") // 指定 TAG，默认为 "X-LOG"
             .build()
-        val androidPrinter: Printer = AndroidPrinter(true) // 通过 android.util.Log 打印日志的打印器
+        val androidPrinter: Printer = AndroidPrinter() // 通过 android.util.Log 打印日志的打印器
         
         // 获取日志文件路径
         val logPath = getLogPath()

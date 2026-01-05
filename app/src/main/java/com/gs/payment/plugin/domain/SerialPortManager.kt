@@ -3,16 +3,19 @@ package com.gs.payment.plugin.domain
 import com.gs.payment.plugin.utils.Logger
 import com.ok.serialport.OkSerialPort
 import com.ok.serialport.data.Request
+import com.ok.serialport.data.Response
+import com.ok.serialport.data.ResponseProcess
 import com.ok.serialport.data.ResponseRule
 import com.ok.serialport.listener.OnConnectListener
 import com.ok.serialport.listener.OnDataListener
+import com.ok.serialport.listener.OnResponseListener
 
 /**
- * 串口服务
+ * 串口服务（单例）
  * @author chyi
  * @date 2026/1/4 19:06
  */
-class SerialPortManager {
+object SerialPortManager {
     private var serialClient: OkSerialPort? = null
     private var devicePath: String? = null
     private var baudRate: Int? = null
@@ -25,7 +28,7 @@ class SerialPortManager {
     fun openSerialPort(devicePath: String, baudRate: Int) {
         // 如果已经连接，先关闭
         if (serialClient?.isConnect() == true) {
-            closeSerialPort()
+            return
         }
 
         this.devicePath = devicePath
@@ -34,7 +37,7 @@ class SerialPortManager {
         serialClient = OkSerialPort.Builder()
             .devicePath(devicePath)
             .baudRate(baudRate)
-            .sendInterval(200)
+            .sendInterval(100)
             .stickPacketHandle(StickPacketHandle())
             .addResponseRule(object : ResponseRule {
                 override fun match(request: Request?, receive: ByteArray): Boolean {
@@ -63,22 +66,30 @@ class SerialPortManager {
 
         serialClient?.addDataListener(object : OnDataListener {
             override fun onRequest(data: ByteArray) {
-                Logger.d("SerialPortManager", "发送数据: ${bytesToHex(data)}")
+                Logger.i("SerialPortManager", "发送数据: ${bytesToHex(data)}")
             }
 
             override fun onResponse(data: ByteArray) {
-                Logger.d("SerialPortManager", "接收数据: ${bytesToHex(data)}")
+                Logger.i("SerialPortManager", "接收数据: ${bytesToHex(data)}")
             }
         })
 
-//        serialClient?.connect()
+        serialClient?.connect()
+    }
+
+    fun addProcess(responseProcess: ResponseProcess) {
+        serialClient?.addProcess(responseProcess)
+    }
+
+    fun removeProcess(responseProcess: ResponseProcess) {
+        serialClient?.removeProcess(responseProcess)
     }
 
     /**
      * 关闭串口
      */
     fun closeSerialPort() {
-//        serialClient?.disconnect()
+        serialClient?.disconnect()
         serialClient = null
         devicePath = null
         baudRate = null
@@ -86,13 +97,13 @@ class SerialPortManager {
 
     /**
      * 发送数据
-     * @param data 要发送的字节数组
+     * @param request
      */
-    fun sendData(data: ByteArray) {
+    fun send(request: Request) {
         if (serialClient?.isConnect() == true) {
-            val request = Request(data)
             serialClient?.request(request)
         } else {
+            openSerialPort(devicePath!!, baudRate!!)
             Logger.w("SerialPortManager", "串口未连接，无法发送数据")
         }
     }

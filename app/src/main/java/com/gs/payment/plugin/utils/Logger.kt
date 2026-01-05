@@ -11,52 +11,45 @@ import com.elvishew.xlog.XLog
 object Logger {
 
     /**
-     * Debug级别日志
-     */
-    fun d(tag: String, message: String) {
-        XLog.d(tag, message)
-    }
-
-    /**
      * Info级别日志
      */
     fun i(tag: String, message: String) {
-        XLog.i(tag, message)
+        XLog.i(message)
     }
 
     /**
      * Warning级别日志
      */
     fun w(tag: String, message: String) {
-        XLog.w(tag, message)
+        XLog.w(message)
     }
 
     /**
      * Error级别日志
      */
     fun e(tag: String, message: String) {
-        XLog.e(tag, message)
+        XLog.e(message)
     }
 
     /**
      * Error级别日志（带异常）
      */
     fun e(tag: String, message: String, throwable: Throwable) {
-        XLog.e(tag, message, throwable)
+        XLog.e(message, throwable)
     }
 
     /**
      * Error级别日志（仅异常）
      */
     fun e(tag: String, throwable: Throwable) {
-        XLog.e(tag, throwable)
+        XLog.e(throwable)
     }
 
     /**
      * Verbose级别日志
      */
     fun v(tag: String, message: String) {
-        XLog.v(tag, message)
+        XLog.v(message)
     }
 }
 

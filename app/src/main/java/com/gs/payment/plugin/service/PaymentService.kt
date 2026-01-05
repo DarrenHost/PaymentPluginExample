@@ -43,13 +43,9 @@ class PaymentService : Service() {
         }
     }
 
-    private lateinit var serialPort: SerialPortManager
-
     @SuppressLint("ForegroundServiceType")
     override fun onCreate() {
         super.onCreate()
-        // 初始化串口管理器
-        serialPort = SerialPortManager()
         // 启动前台服务
         startForeground(NOTIFICATION_ID, buildNotification())
     }
@@ -57,7 +53,7 @@ class PaymentService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // 打开串口（固定配置）
         // 注意：需要根据实际硬件配置修改设备路径和波特率
-        serialPort.openSerialPort("/dev/ttyS7", 9600)
+        SerialPortManager.openSerialPort("/dev/ttyS7", 9600)
         return START_STICKY
     }
 
@@ -92,7 +88,7 @@ class PaymentService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         // 关闭串口
-        serialPort.closeSerialPort()
+        SerialPortManager.closeSerialPort()
         // 启动重启任务
         restartWork(this)
     }

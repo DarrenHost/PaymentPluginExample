@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import com.gs.payment.plugin.domain.CommandBuilder
+import com.gs.payment.plugin.domain.SerialPortManager
 import com.gs.payment.plugin.utils.Logger
 
 class StartPayReceiver : BaseBroadReceiver() {
@@ -43,17 +45,78 @@ class StartPayReceiver : BaseBroadReceiver() {
             sendResult(context, false, "invalid orderId", "")
             return
         }
+        if (orderMoney.isNullOrBlank()) {
+            sendResult(context, false, "invalid orderMoney", "")
+            return
+        }
+        val money = try {
+            orderMoney.toDoubleOrNull() ?: 0.0
+        } catch (e: Exception) {
+            sendResult(context, false, "invalid orderMoney", "")
+            return
+        }
 
-        Handler(Looper.getMainLooper())
-            .postDelayed({
-                try {
-                    sendResult(context, true, "", "11.0")
-                } catch (t: Throwable) {
-                    Logger.e(TAG, "Error while sending PAY_STATE_ACTION", t)
-                    log("Error while sending PAY_STATE_ACTION:${t.message}")
-                    sendResult(context, false, "internal error", "11.0")
+        if (money <= 0) {
+            sendResult(context, false, "invalid orderMoney", "")
+            return
+        }
+
+        // 检查串口是否连接
+        if (!SerialPortManager.isConnected()) {
+            Logger.w(TAG, "串口未连接，无法发送支付指令")
+            log("串口未连接，无法发送支付指令")
+            sendResult(context, false, "串口未连接", "")
+            return
+        }
+
+        // 转换金额为分（整数）
+        val amount = (money * 100).toInt()
+
+        // 格式化流水号：确保为16字节ASCII字符串
+        val serialNumber = formatSerialNumber(orderId)
+
+        Logger.i(TAG, "准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
+        log("准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
+
+        // 构建并发送支付指令
+        val request = CommandBuilder.buildPaymentCommand(
+            serialNumber = serialNumber,
+            amount = amount,
+            timeout = 60,
+            action = { success, message ->
+                val resultMessage = message ?: "支付指令发送成功"
+                Logger.i(TAG, "支付指令发送成功: $resultMessage")
+                log("支付指令发送成功: $resultMessage")
+                if (success) {
+                    Logger.e(TAG, "等待支付结果")
+                    log("等待支付结果")
+                    CommandBuilder.waitPayResult { isSuccess, msg ->
+                        Logger.i(TAG, "收到支付结果: $isSuccess")
+                        log("收到支付结果: $isSuccess")
+                        if (isSuccess) {
+                            sendResult(context, true, resultMessage, orderMoney)
+                        } else {
+                            sendResult(context, false, msg ?: "支付失败", orderMoney)
+                        }
+                    }
+                } else {
+                    val errorMessage = message ?: "支付指令发送失败"
+                    Logger.e(TAG, "支付指令发送失败: $errorMessage")
+                    log("支付指令发送失败: $errorMessage")
+                    sendResult(context, false, errorMessage, orderMoney)
                 }
-            }, 5 * 1000)
+            }
+        )
+
+        try {
+            SerialPortManager.send(request)
+            Logger.i(TAG, "支付指令已发送到串口")
+            log("支付指令已发送到串口")
+        } catch (e: Exception) {
+            Logger.e(TAG, "发送支付指令异常", e)
+            log("发送支付指令异常: ${e.message}")
+            sendResult(context, false, "发送指令异常: ${e.message}", "")
+        }
     }
 
     private fun sendResult(
@@ -72,5 +135,23 @@ class StartPayReceiver : BaseBroadReceiver() {
         )
         log("Sending PAY_STATE_ACTION: status=${if (success) "success" else "fail"}, message=$message, money=$money")
         ctx.sendBroadcast(out)
+    }
+
+    /**
+     * 格式化流水号，确保为16字节ASCII字符串
+     * 如果长度不足16字节，右侧补空格；如果超过16字节，截取前16字节
+     *
+     * @param orderId 原始订单ID
+     * @return 格式化后的16字节ASCII字符串
+     */
+    private fun formatSerialNumber(orderId: String): String {
+        // 移除非ASCII字符，只保留可打印的ASCII字符
+        val cleanId = orderId.filter { it.code in 32..126 }
+
+        return when {
+            cleanId.length == 16 -> cleanId
+            cleanId.length > 16 -> cleanId.substring(0, 16)
+            else -> cleanId.padEnd(16, ' ') // 右侧补空格到16字节
+        }
     }
 }

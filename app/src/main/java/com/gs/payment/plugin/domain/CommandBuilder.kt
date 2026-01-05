@@ -2,6 +2,8 @@ package com.gs.payment.plugin.domain
 
 import com.ok.serialport.data.Request
 import com.ok.serialport.data.Response
+import com.ok.serialport.data.ResponseProcess
+import com.ok.serialport.data.ResponseRule
 import com.ok.serialport.listener.OnResponseListener
 
 /**
@@ -59,7 +61,7 @@ object CommandBuilder {
 
         // 构建数据包
         val packet =
-            ByteArray(4 + DATA_LENGTH_UPLOAD_PAYMENT + 1) // 包头(1) + 命令码(1) + 数据长度(1) + 数据(24) + 校验和(1) = 28
+            ByteArray(3 + DATA_LENGTH_UPLOAD_PAYMENT + 1) // 包头(1) + 命令码(1) + 数据长度(1) + 数据(24) + 校验和(1) = 28
 
         var index = 0
 
@@ -160,9 +162,9 @@ object CommandBuilder {
                 override fun onResponse(response: Response) {
                     when (response.data[3]) {
                         0x00.toByte() -> action.invoke(true, null)
-                        0x01.toByte() -> action.invoke(true, "设备忙")
-                        0x02.toByte() -> action.invoke(true, "参数错误")
-                        else -> action.invoke(true, "未知异常")
+                        0x01.toByte() -> action.invoke(false, "设备忙")
+                        0x02.toByte() -> action.invoke(false, "参数错误")
+                        else -> action.invoke(false, "未知异常")
                     }
                 }
 
@@ -216,6 +218,45 @@ object CommandBuilder {
         System.arraycopy(strBytes, 0, bytes, 0, copyLength)
         // 剩余部分已经是0x00，无需额外处理
         return bytes
+    }
+
+    private var process: ResponseProcess? = null
+
+    fun waitPayResult(action: ((Boolean, String?) -> Unit)) {
+        process = ResponseProcess()
+            .addResponseRule(object : ResponseRule {
+                override fun match(request: Request?, receive: ByteArray): Boolean {
+                    return receive[1] == 0x80.toByte()
+                }
+            })
+            .onResponseListener(object : OnResponseListener {
+                override fun onFailure(request: Request?, e: Exception) {
+                    action.invoke(false, e.message)
+                    removePayResult()
+                }
+
+                override fun onResponse(response: Response) {
+                    removePayResult()
+                    when (response.data[23]) {
+                        0x00.toByte() -> action.invoke(true, null)
+                        0x01.toByte() -> action.invoke(false, "支付超时")
+                        0x02.toByte() -> action.invoke(false, "消费机主动取消支付")
+                        0x03.toByte() -> action.invoke(
+                            false,
+                            "其它错误（余额不足、刷卡错、消费限制等等）"
+                        )
+
+                        else -> action.invoke(false, "其它异常")
+                    }
+                }
+            })
+        SerialPortManager.addProcess(process!!)
+    }
+
+    fun removePayResult() {
+        process?.let {
+            SerialPortManager.removeProcess(it)
+        }
     }
 }
 
