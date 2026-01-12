@@ -14,14 +14,14 @@ object Logger {
      * Info级别日志
      */
     fun i(tag: String, message: String) {
-        XLog.i(message)
+        XLog.tag(tag).i(message)
     }
 
     /**
      * Warning级别日志
      */
     fun w(tag: String, message: String) {
-        XLog.w(message)
+        XLog.tag(tag).w(message)
     }
 
     /**

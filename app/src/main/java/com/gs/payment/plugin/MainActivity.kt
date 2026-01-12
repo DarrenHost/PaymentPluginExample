@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import com.gs.payment.plugin.utils.Logger
 import androidx.activity.compose.setContent
@@ -53,6 +54,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.gs.payment.plugin.domain.CommandBuilder
+import com.ok.serialport.utils.ByteUtils
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -96,6 +99,12 @@ class MainActivity : ComponentActivity() {
         
         // 启动MonitoringWorker（如果未启动）
         startMonitoringWorkerIfNeeded()
+
+        val command = CommandBuilder.buildTestCommand { b, s ->
+
+        }
+        val hexStr = ByteUtils.byteArrToHexStr(command.data)
+        Logger.i(TAG, hexStr)
     }
 
     override fun onDestroy() {
@@ -199,7 +208,7 @@ class MainActivity : ComponentActivity() {
         val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
-        intent.putExtra("ORDER_MONEY", "10")
+        intent.putExtra("ORDER_MONEY", "0.01")
         intent.putExtra("PRODUCT_ID", "1002001")
         intent.putExtra("PRODUCT_NAME", "Test the product name")
         sendBroadcast(intent)
@@ -213,7 +222,7 @@ class MainActivity : ComponentActivity() {
         val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
-        intent.putExtra("ORDER_MONEY", "10")
+        intent.putExtra("ORDER_MONEY", "0.01")
         intent.putExtra("PRODUCT_ID", "1002001")
         intent.putExtra("PRODUCT_NAME", "Test the product name")
         intent.putExtra("SCAN_CODE", "a1223454565")
@@ -228,7 +237,7 @@ class MainActivity : ComponentActivity() {
         val intent = Intent("com.coffeeji.payment.plugin.PAY_CANCEL_ACTON")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
-        intent.putExtra("ORDER_MONEY", "10")
+        intent.putExtra("ORDER_MONEY", "0.01")
         sendBroadcast(intent)
     }
 
@@ -240,7 +249,7 @@ class MainActivity : ComponentActivity() {
         val intent = Intent("com.coffeeji.payment.plugin.MAKE_STATE_ACTION")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
-        intent.putExtra("ORDER_MONEY", "10")
+        intent.putExtra("ORDER_MONEY", "0.01")
         intent.putExtra("STATE", if (isSuccess) "success" else "fail")
         sendBroadcast(intent)
     }

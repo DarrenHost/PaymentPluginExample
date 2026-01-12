@@ -152,7 +152,7 @@ object CommandBuilder {
         action: ((Boolean, String?) -> Unit)
     ): Request {
         return Request(packet)
-            .timeout(500)
+            .timeout(1500)
             .timeoutRetry(2)
             .onResponseListener(object : OnResponseListener {
                 override fun onFailure(request: Request?, e: Exception) {
