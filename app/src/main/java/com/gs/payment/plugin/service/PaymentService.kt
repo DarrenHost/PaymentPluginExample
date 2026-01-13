@@ -14,6 +14,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.gs.payment.plugin.R
 import com.gs.payment.plugin.domain.SerialPortManager
+import com.gs.payment.plugin.utils.SerialPortConfig
 import com.gs.payment.plugin.work.RestartWatchWorker
 import java.util.concurrent.TimeUnit
 
@@ -51,9 +52,10 @@ class PaymentService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 打开串口（固定配置）
-        // 注意：需要根据实际硬件配置修改设备路径和波特率
-        SerialPortManager.openSerialPort("/dev/ttyS7", 9600)
+        // 从配置读取串口路径
+        val devicePath = SerialPortConfig.getDevicePath(this)
+        // 打开串口
+        SerialPortManager.openSerialPort(devicePath, 9600)
         return START_STICKY
     }
 

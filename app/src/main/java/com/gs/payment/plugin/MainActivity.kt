@@ -33,6 +33,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,15 +49,28 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.gs.payment.plugin.domain.CommandBuilder
+import com.gs.payment.plugin.utils.SerialPortConfig
+import com.ok.serialport.jni.SerialPortFinder
+import com.ok.serialport.jni.model.Device
 import com.ok.serialport.utils.ByteUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -257,12 +272,85 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun ScrollableLogApp(logList: List<String>) {
+        val context = this@MainActivity
         val lazyListState = rememberLazyListState()
+        val coroutineScope = rememberCoroutineScope()
+        
+        // 串口路径状态
+        val currentDevicePath = remember { 
+            mutableStateOf(SerialPortConfig.getDevicePath(context)) 
+        }
+        
+        // 对话框显示状态
+        val showDialog = remember { mutableStateOf(false) }
+        
+        // 串口列表状态
+        val serialPortList = remember { mutableStateListOf<String>() }
+        
+        // 选中的串口路径
+        val selectedDevicePath = remember { mutableStateOf("") }
 
         // 自动滚动到底部
         LaunchedEffect(logList.size) {
             if (logList.isNotEmpty()) {
                 lazyListState.animateScrollToItem(logList.size - 1)
+            }
+        }
+        
+        // 加载串口列表
+        LaunchedEffect(showDialog.value) {
+            if (showDialog.value) {
+                serialPortList.clear()
+                withContext(Dispatchers.IO) {
+                    try {
+                        val finder = SerialPortFinder()
+                        val devices = finder.getDevices()
+                        withContext(Dispatchers.Main) {
+                            if (devices.isNotEmpty()) {
+                                devices.forEach {
+                                    serialPortList.add(it.file.absolutePath)
+                                }
+                            } else {
+                                // 如果没有找到串口，添加默认值
+                                serialPortList.add(SerialPortConfig.getDefaultDevicePath())
+                            }
+                            selectedDevicePath.value = currentDevicePath.value
+                        }
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "获取串口列表失败", e)
+                        withContext(Dispatchers.Main) {
+                            serialPortList.add(SerialPortConfig.getDefaultDevicePath())
+                            selectedDevicePath.value = currentDevicePath.value
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 处理串口选择确认
+        fun onConfirmSerialPortSelection() {
+            if (selectedDevicePath.value.isNotEmpty()) {
+                // 保存配置
+                SerialPortConfig.saveDevicePath(context, selectedDevicePath.value)
+                currentDevicePath.value = selectedDevicePath.value
+                
+                // 关闭对话框
+                showDialog.value = false
+                
+                // 重启服务
+                coroutineScope.launch {
+                    try {
+                        // 停止服务
+                        PaymentService.stop(context)
+                        // 等待服务停止
+                        kotlinx.coroutines.delay(500)
+                        // 启动服务
+                        PaymentService.start(context)
+                        Logger.i(TAG, "串口路径已更新为: ${selectedDevicePath.value}，服务已重启")
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "重启服务失败", e)
+                    }
+                }
             }
         }
 
@@ -276,6 +364,25 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     actions = {
+                        // 串口路径显示和编辑
+                        Row(
+                            modifier = Modifier.padding(end = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = currentDevicePath.value,
+                                modifier = Modifier.padding(end = 4.dp),
+                                fontSize = 14.sp,
+                                color = Color.Black
+                            )
+                            IconButton(onClick = { showDialog.value = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Serial Port",
+                                    tint = Color.Black
+                                )
+                            }
+                        }
                         Text(
                             text = "Count: ${logList.size}",
                             modifier = Modifier.padding(end = 16.dp),
@@ -389,6 +496,72 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+        
+        // 串口选择对话框
+        if (showDialog.value) {
+            AlertDialog(
+                onDismissRequest = { showDialog.value = false },
+                title = {
+                    Text(
+                        text = "选择串口路径",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    if (serialPortList.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("正在加载串口列表...")
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp)
+                        ) {
+                            items(serialPortList) { devicePath ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable {
+                                            selectedDevicePath.value = devicePath
+                                        },
+                                    elevation = CardDefaults.cardElevation(
+                                        defaultElevation = if (selectedDevicePath.value == devicePath) 4.dp else 1.dp
+                                    )
+                                ) {
+                                    Text(
+                                        text = devicePath,
+                                        modifier = Modifier.padding(16.dp),
+                                        fontSize = 14.sp,
+                                        fontWeight = if (selectedDevicePath.value == devicePath) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (selectedDevicePath.value == devicePath) MaterialTheme.colorScheme.primary else Color.Black
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { onConfirmSerialPortSelection() },
+                        enabled = selectedDevicePath.value.isNotEmpty()
+                    ) {
+                        Text("确认")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDialog.value = false }) {
+                        Text("取消")
+                    }
+                }
+            )
         }
     }
 }
