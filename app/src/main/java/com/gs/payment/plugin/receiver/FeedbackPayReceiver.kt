@@ -25,8 +25,6 @@ class FeedbackPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "MAKE_STATE_ACTION received. ORDER_MONEY=${orderMoney}")
         Logger.i(TAG, "MAKE_STATE_ACTION received. STATE=${state}")
 
-        log( "MAKE_STATE_ACTION received. ORDER_ID=${orderId}")
-        log( "MAKE_STATE_ACTION received. ORDER_MONEY=${orderMoney}")
-        log( "MAKE_STATE_ACTION received. STATE=${state}")
+
     }
 }

@@ -2,14 +2,18 @@ package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
+import android.util.Log
 import com.gs.payment.plugin.domain.CommandBuilder
-import com.gs.payment.plugin.domain.SerialPortManager
+import com.gs.payment.plugin.manager.AsciiSocketManager
+import com.gs.payment.plugin.manager.Constants
+import com.gs.payment.plugin.manager.SocketCallback
 import com.gs.payment.plugin.utils.Logger
+import com.mg.switchgpio.manager.CommandEnum
+import com.mg.switchgpio.manager.CommandUtils
 
-class StartPayReceiver : BaseBroadReceiver() {
+class StartPayReceiver : BaseBroadReceiver(), SocketCallback {
 
+    private var mContext: Context? = null
     companion object {
         private const val TAG = "PaymentPlugin.StartPayReceiver"
 
@@ -20,8 +24,8 @@ class StartPayReceiver : BaseBroadReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
+        mContext=context
         Logger.i(TAG, "Received intent action: ${intent.action}")
-        log("Received intent action: ${intent.action}")
         if (intent.action != ACTION) return
 
         val orderId = intent.getStringExtra("ORDER_ID")
@@ -34,12 +38,7 @@ class StartPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "PAY_ACTON received. PRODUCT_ID=${productId}")
         Logger.i(TAG, "PAY_ACTON received. PRODUCT_NAME=${productName}")
         Logger.i(TAG, "PAY_ACTON received. SCAN_CODE=${scanCode}")
-
-        log("PAY_ACTON received. ORDER_ID=${orderId}")
-        log("PAY_ACTON received. ORDER_MONEY=${orderMoney}")
-        log("PAY_ACTON received. PRODUCT_ID=${productId}")
-        log("PAY_ACTON received. PRODUCT_NAME=${productName}")
-        log("PAY_ACTON received. SCAN_CODE=${scanCode}")
+        Constants.TRANSACTION_AMOUNT = orderMoney ?: ""
 
         if (orderId.isNullOrBlank()) {
             sendResult(context, false, "invalid orderId", "")
@@ -62,10 +61,9 @@ class StartPayReceiver : BaseBroadReceiver() {
         }
 
         // 检查串口是否连接
-        if (!SerialPortManager.isConnected()) {
-            Logger.w(TAG, "串口未连接，无法发送支付指令")
-            log("串口未连接，无法发送支付指令")
-            sendResult(context, false, "串口未连接", "")
+        if (!AsciiSocketManager.isConnected) {
+            Logger.i(TAG, "socket未连接，无法发送支付指令")
+            sendResult(context, false, "socket未连接", "")
             return
         }
 
@@ -78,35 +76,37 @@ class StartPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
         log("准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
 
-        // 构建并发送支付指令
-        val request = CommandBuilder.buildPaymentCommand(
-            serialNumber = serialNumber,
-            amount = amount,
-            timeout = 60,
-            action = { success, message ->
-                if (success) {
-                    Logger.e(TAG, "等待支付结果")
-                    log("等待支付结果")
-                    CommandBuilder.waitPayResult { isSuccess, msg ->
-                        Logger.i(TAG, "收到支付结果: $isSuccess")
-                        log("收到支付结果: $isSuccess")
-                        if (isSuccess) {
-                            sendResult(context, true, "支付成功", orderMoney)
-                        } else {
-                            sendResult(context, false, msg ?: "支付失败", orderMoney)
+        // 构建并发送支付指令,得到支付结果
+        try {
+            // 使用新的支付结果回调方法
+            CommandUtils.sendPaymentCommand(
+                AsciiSocketManager, 
+                CommandEnum.VENTA, 
+                orderMoney,
+                object : AsciiSocketManager.PaymentResultCallback {
+                    override fun onPaymentSuccess(response: String) {
+                        Logger.i(TAG, "支付成功，响应: $response")
+                        log("支付成功: $response")
+                        
+                        // 支付成功，发送确认命令s
+                        try {
+                            //延时10秒
+                            Thread.sleep(5000)
+                            CommandUtils.sendCommand(AsciiSocketManager, CommandEnum.CONFIRMACION, Constants.TRANSACTION_AMOUNT)
+                            sendResult(mContext, true, "支付成功", Constants.TRANSACTION_AMOUNT)
+                        } catch (e: Exception) {
+                            Logger.e(TAG, "发送确认命令异常", e)
+                            sendResult(mContext, false, "支付成功但确认失败: ${e.message}", Constants.TRANSACTION_AMOUNT)
                         }
                     }
-                } else {
-                    val errorMessage = message ?: "支付指令发送失败"
-                    Logger.e(TAG, "支付指令发送失败: $errorMessage")
-                    log("支付指令发送失败: $errorMessage")
-                    sendResult(context, false, errorMessage, orderMoney)
-                }
-            }
-        )
 
-        try {
-            SerialPortManager.send(request)
+                    override fun onPaymentFailed(error: String) {
+                        Logger.e(TAG, "支付失败: $error")
+                        log("支付失败: $error")
+                        sendResult(mContext, false, error, Constants.TRANSACTION_AMOUNT)
+                    }
+                }
+            )
         } catch (e: Exception) {
             Logger.e(TAG, "发送支付指令异常", e)
             log("发送支付指令异常: ${e.message}")
@@ -114,8 +114,9 @@ class StartPayReceiver : BaseBroadReceiver() {
         }
     }
 
+    // 发送支付结果
     private fun sendResult(
-        ctx: Context,
+        ctx: Context?,
         success: Boolean,
         message: String,
         money: String
@@ -129,7 +130,7 @@ class StartPayReceiver : BaseBroadReceiver() {
             "Sending PAY_STATE_ACTION: status=${if (success) "success" else "fail"}, message=$message, money=$money"
         )
         log("Sending PAY_STATE_ACTION: status=${if (success) "success" else "fail"}, message=$message, money=$money")
-        ctx.sendBroadcast(out)
+        ctx?.sendBroadcast(out)
     }
 
     /**
@@ -148,5 +149,30 @@ class StartPayReceiver : BaseBroadReceiver() {
             cleanId.length > 16 -> cleanId.substring(0, 16)
             else -> cleanId.padEnd(16, ' ') // 右侧补空格到16字节
         }
+    }
+
+    override fun onConnectionStatusChanged(isConnected: Boolean) {
+        Logger.i(TAG, "Socket连接状态变更: $isConnected")
+    }
+
+    override fun onMessageReceived(message: String) {
+        if (message == null){
+            Logger.i(TAG, "onMessageReceived: message is null")
+            return
+        }
+        Logger.i(TAG, "onMessageReceived: $message")
+
+        // 解析交易数据
+        val parsedData = CommandUtils.parseTransactionData(message)
+        //打印结果
+        Logger.i(TAG, "parseTransactionData: $parsedData")
+        
+        // 支付结果的逻辑已经移到了PaymentResultCallback中，这里只记录日志
+    }
+
+    override fun onError(e: Exception) {
+        Logger.e(TAG, "Socket连接错误", e)
+        log("Socket连接错误: ${e.message}")
+        sendResult(mContext, false, "Socket连接错误: ${e.message}", "")
     }
 }

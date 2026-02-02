@@ -13,7 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.gs.payment.plugin.R
-import com.gs.payment.plugin.domain.SerialPortManager
+import com.gs.payment.plugin.manager.AsciiSocketManager
 import com.gs.payment.plugin.utils.SerialPortConfig
 import com.gs.payment.plugin.work.RestartWatchWorker
 import java.util.concurrent.TimeUnit
@@ -52,10 +52,10 @@ class PaymentService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 从配置读取串口路径
-        val devicePath = SerialPortConfig.getDevicePath(this)
-        // 打开串口
-        SerialPortManager.openSerialPort(devicePath, 9600)
+        // 从配置读取socket IP和端口号
+        val socketIp = SerialPortConfig.getSocketIp(this)
+        val socketPort = SerialPortConfig.getSocketPort(this)
+        AsciiSocketManager.connect(socketIp, socketPort, null)
         return START_STICKY
     }
 
@@ -89,8 +89,8 @@ class PaymentService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // 关闭串口
-        SerialPortManager.closeSerialPort()
+        //关闭socket
+        AsciiSocketManager.disconnect()
         // 启动重启任务
         restartWork(this)
     }

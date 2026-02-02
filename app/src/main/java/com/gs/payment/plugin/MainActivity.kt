@@ -1,25 +1,14 @@
 package com.gs.payment.plugin
 
+import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
-import com.gs.payment.plugin.utils.Logger
 import androidx.activity.compose.setContent
-import androidx.lifecycle.lifecycleScope
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
-import androidx.work.await
-import com.gs.payment.plugin.service.PaymentService
-import com.gs.payment.plugin.work.MonitoringWorker
-import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,11 +29,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,21 +42,24 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.IconButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.lifecycleScope
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.await
 import com.gs.payment.plugin.domain.CommandBuilder
+import com.gs.payment.plugin.service.PaymentService
+import com.gs.payment.plugin.utils.Logger
 import com.gs.payment.plugin.utils.SerialPortConfig
+import com.gs.payment.plugin.work.MonitoringWorker
 import com.ok.serialport.jni.SerialPortFinder
-import com.ok.serialport.jni.model.Device
 import com.ok.serialport.utils.ByteUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -74,6 +67,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : ComponentActivity() {
@@ -170,6 +164,7 @@ class MainActivity : ComponentActivity() {
     /**
      * 启动MonitoringWorker（如果未启动）
      */
+    @SuppressLint("RestrictedApi")
     private fun startMonitoringWorkerIfNeeded() {
         lifecycleScope.launch {
             try {
@@ -276,19 +271,18 @@ class MainActivity : ComponentActivity() {
         val lazyListState = rememberLazyListState()
         val coroutineScope = rememberCoroutineScope()
         
-        // 串口路径状态
-        val currentDevicePath = remember { 
-            mutableStateOf(SerialPortConfig.getDevicePath(context)) 
+        // socket状态
+        val currentDevicePath = remember {
+            mutableStateOf(SerialPortConfig.getSocketIp(context))
+        }
+        
+        // socket端口
+        val currentSocketPort = remember {
+            mutableStateOf(SerialPortConfig.getSocketPort(context).toString())
         }
         
         // 对话框显示状态
         val showDialog = remember { mutableStateOf(false) }
-        
-        // 串口列表状态
-        val serialPortList = remember { mutableStateListOf<String>() }
-        
-        // 选中的串口路径
-        val selectedDevicePath = remember { mutableStateOf("") }
 
         // 自动滚动到底部
         LaunchedEffect(logList.size) {
@@ -297,59 +291,39 @@ class MainActivity : ComponentActivity() {
             }
         }
         
-        // 加载串口列表
-        LaunchedEffect(showDialog.value) {
-            if (showDialog.value) {
-                serialPortList.clear()
-                withContext(Dispatchers.IO) {
-                    try {
-                        val finder = SerialPortFinder()
-                        val devices = finder.getDevices()
-                        withContext(Dispatchers.Main) {
-                            if (devices.isNotEmpty()) {
-                                devices.forEach {
-                                    serialPortList.add(it.file.absolutePath)
-                                }
-                            } else {
-                                // 如果没有找到串口，添加默认值
-                                serialPortList.add(SerialPortConfig.getDefaultDevicePath())
-                            }
-                            selectedDevicePath.value = currentDevicePath.value
-                        }
-                    } catch (e: Exception) {
-                        Logger.e(TAG, "获取串口列表失败", e)
-                        withContext(Dispatchers.Main) {
-                            serialPortList.add(SerialPortConfig.getDefaultDevicePath())
-                            selectedDevicePath.value = currentDevicePath.value
-                        }
-                    }
-                }
-            }
-        }
-        
-        // 处理串口选择确认
+        // 处理socket配置确认
         fun onConfirmSerialPortSelection() {
-            if (selectedDevicePath.value.isNotEmpty()) {
-                // 保存配置
-                SerialPortConfig.saveDevicePath(context, selectedDevicePath.value)
-                currentDevicePath.value = selectedDevicePath.value
-                
-                // 关闭对话框
-                showDialog.value = false
-                
-                // 重启服务
-                coroutineScope.launch {
-                    try {
-                        // 停止服务
-                        PaymentService.stop(context)
-                        // 等待服务停止
-                        kotlinx.coroutines.delay(500)
-                        // 启动服务
-                        PaymentService.start(context)
-                        Logger.i(TAG, "串口路径已更新为: ${selectedDevicePath.value}，服务已重启")
-                    } catch (e: Exception) {
-                        Logger.e(TAG, "重启服务失败", e)
+            if (currentDevicePath.value.isNotEmpty() && currentSocketPort.value.isNotEmpty()) {
+                try {
+                    val port = currentSocketPort.value.toInt()
+                    if (port <= 0 || port > 65535) {
+                        Logger.e(TAG, "无效的端口号: $port")
+                        return
                     }
+                    
+                    // 保存配置
+                    SerialPortConfig.saveSocketIp(context, currentDevicePath.value)
+                    SerialPortConfig.saveSocketPort(context, port)
+                    
+                    // 关闭对话框
+                    showDialog.value = false
+                    
+                    // 重启服务
+                    coroutineScope.launch {
+                        try {
+                            // 停止服务
+                            PaymentService.stop(context)
+                            // 等待服务停止
+                            kotlinx.coroutines.delay(500)
+                            // 启动服务
+                            PaymentService.start(context)
+                            Logger.i(TAG, "socket已更新为: ${currentDevicePath.value}:${port}，服务已重启")
+                        } catch (e: Exception) {
+                            Logger.e(TAG, "重启服务失败", e)
+                        }
+                    }
+                } catch (e: NumberFormatException) {
+                    Logger.e(TAG, "端口号格式错误: ${currentSocketPort.value}")
                 }
             }
         }
@@ -364,13 +338,13 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     actions = {
-                        // 串口路径显示和编辑
+                        // Socket配置显示和编辑
                         Row(
                             modifier = Modifier.padding(end = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = currentDevicePath.value,
+                                text = "${currentDevicePath.value}:${SerialPortConfig.getSocketPort(context)}",
                                 modifier = Modifier.padding(end = 4.dp),
                                 fontSize = 14.sp,
                                 color = Color.Black
@@ -378,7 +352,7 @@ class MainActivity : ComponentActivity() {
                             IconButton(onClick = { showDialog.value = true }) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit Serial Port",
+                                    contentDescription = "Edit Socket",
                                     tint = Color.Black
                                 )
                             }
@@ -466,92 +440,49 @@ class MainActivity : ComponentActivity() {
 
                     Button(
                         onClick = {
-                            startPayScan()
-                        }
-                    ) {
-                        Text("Initiate payments-Scanner")
-                    }
-
-                    Button(
-                        onClick = {
                             cancelPay()
                         }
                     ) {
                         Text("Cancel payment")
                     }
-
-                    Button(
-                        onClick = {
-                            feedbackPay(true)
-                        }
-                    ) {
-                        Text("Feedback payment-success")
-                    }
-                    Button(
-                        onClick = {
-                            feedbackPay(false)
-                        }
-                    ) {
-                        Text("Feedback payment-Fail")
-                    }
                 }
             }
         }
         
-        // 串口选择对话框
+        // socket输入对话框
         if (showDialog.value) {
             AlertDialog(
                 onDismissRequest = { showDialog.value = false },
                 title = {
                     Text(
-                        text = "选择串口路径",
+                        text = "输入socket路径",
                         fontWeight = FontWeight.Bold
                     )
                 },
                 text = {
-                    if (serialPortList.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("正在加载串口列表...")
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(300.dp)
-                        ) {
-                            items(serialPortList) { devicePath ->
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .clickable {
-                                            selectedDevicePath.value = devicePath
-                                        },
-                                    elevation = CardDefaults.cardElevation(
-                                        defaultElevation = if (selectedDevicePath.value == devicePath) 4.dp else 1.dp
-                                    )
-                                ) {
-                                    Text(
-                                        text = devicePath,
-                                        modifier = Modifier.padding(16.dp),
-                                        fontSize = 14.sp,
-                                        fontWeight = if (selectedDevicePath.value == devicePath) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selectedDevicePath.value == devicePath) MaterialTheme.colorScheme.primary else Color.Black
-                                    )
-                                }
-                            }
-                        }
+                    Column {
+                        // IP地址输入框
+                        TextField(
+                            value = currentDevicePath.value,
+                            onValueChange = { currentDevicePath.value = it },
+                            label = { Text("IP地址") },
+                            singleLine = true,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        
+                        // 端口号输入框
+                        TextField(
+                            value = currentSocketPort.value,
+                            onValueChange = { currentSocketPort.value = it },
+                            label = { Text("端口号") },
+                            singleLine = true
+                        )
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = { onConfirmSerialPortSelection() },
-                        enabled = selectedDevicePath.value.isNotEmpty()
+                        enabled = currentDevicePath.value.isNotEmpty() && currentSocketPort.value.isNotEmpty()
                     ) {
                         Text("确认")
                     }

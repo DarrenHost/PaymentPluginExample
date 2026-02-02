@@ -11,7 +11,10 @@ import android.content.SharedPreferences
 object SerialPortConfig {
     private const val PREF_NAME = "serial_port_config"
     private const val KEY_DEVICE_PATH = "device_path"
-    private const val DEFAULT_DEVICE_PATH = "/dev/ttyS7"
+    private const val KEY_SOCKET_PORT = "socket_port"
+    //socket端口
+    private const val DEFAULT_SOCKET_IP = "127.0.0.1"
+    private const val DEFAULT_SOCKET_PORT = 4444
 
     /**
      * 获取 SharedPreferences
@@ -21,26 +24,38 @@ object SerialPortConfig {
     }
 
     /**
-     * 保存串口路径
+     * 保存socket路径
      */
-    fun saveDevicePath(context: Context, devicePath: String) {
+    fun saveSocketIp(context: Context, socketIp: String) {
         getSharedPreferences(context)
             .edit()
-            .putString(KEY_DEVICE_PATH, devicePath)
+            .putString(KEY_DEVICE_PATH, socketIp)
             .apply()
     }
 
-    /**
-     * 读取串口路径
-     */
-    fun getDevicePath(context: Context): String {
+    //socket端口
+    fun getSocketIp(context: Context): String {
         return getSharedPreferences(context)
-            .getString(KEY_DEVICE_PATH, DEFAULT_DEVICE_PATH)
-            ?: DEFAULT_DEVICE_PATH
+            .getString(KEY_DEVICE_PATH, DEFAULT_SOCKET_IP)
+            ?: DEFAULT_SOCKET_IP
+    }
+    
+    /**
+     * 保存socket端口号
+     */
+    fun saveSocketPort(context: Context, port: Int) {
+        getSharedPreferences(context)
+            .edit()
+            .putInt(KEY_SOCKET_PORT, port)
+            .apply()
+    }
+    
+    /**
+     * 获取socket端口号
+     */
+    fun getSocketPort(context: Context): Int {
+        return getSharedPreferences(context)
+            .getInt(KEY_SOCKET_PORT, DEFAULT_SOCKET_PORT)
     }
 
-    /**
-     * 获取默认串口路径
-     */
-    fun getDefaultDevicePath(): String = DEFAULT_DEVICE_PATH
 }
