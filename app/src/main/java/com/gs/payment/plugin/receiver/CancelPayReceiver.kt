@@ -27,17 +27,6 @@ class CancelPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "PAY_CANCEL_ACTON received. ORDER_ID=${orderId}")
         Logger.i(TAG, "PAY_CANCEL_ACTON received. ORDER_MONEY=${orderMoney}")
 
-        CommandBuilder.removePayResult()
-        val request = CommandBuilder.buildCancelPaymentCommand { success, message ->
-            if (success) {
-                val resultMessage = message ?: "取消支付指令发送成功"
-                Logger.i(TAG, "取消支付指令发送成功: $resultMessage")
-            } else {
-                val errorMessage = message ?: "取消支付指令发送失败"
-                Logger.e(TAG, "取消支付指令发送失败: $errorMessage")
-            }
-        }
-
         try {
             CommandUtils.sendCommand(AsciiSocketManager, CommandEnum.ANULACION, Constants.TRANSACTION_AMOUNT)
             Logger.i(TAG, "取消支付指令已发送")

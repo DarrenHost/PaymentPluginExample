@@ -2,7 +2,11 @@ package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
+import com.gs.payment.plugin.manager.AsciiSocketManager
+import com.gs.payment.plugin.manager.Constants
 import com.gs.payment.plugin.utils.Logger
+import com.mg.switchgpio.manager.CommandEnum
+import com.mg.switchgpio.manager.CommandUtils
 
 class FeedbackPayReceiver : BaseBroadReceiver() {
 
@@ -25,6 +29,7 @@ class FeedbackPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "MAKE_STATE_ACTION received. ORDER_MONEY=${orderMoney}")
         Logger.i(TAG, "MAKE_STATE_ACTION received. STATE=${state}")
 
+        CommandUtils.sendCommand(AsciiSocketManager, CommandEnum.ANULACION, Constants.TRANSACTION_AMOUNT)
 
     }
 }
