@@ -34,7 +34,7 @@
             android:enabled="true"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.coffeeji.payment.plugin.PAY_ACTON" />
+                <action android:name="com.coffeeji.payment.plugin.PAY_ACTION" />
             </intent-filter>
         </receiver>
 

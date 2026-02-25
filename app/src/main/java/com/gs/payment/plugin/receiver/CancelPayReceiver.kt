@@ -10,7 +10,7 @@ class CancelPayReceiver : BaseBroadReceiver() {
 
     companion object {
         private const val TAG = "PaymentPlugin.CancelPayReceiver"
-        const val ACTION = "com.coffeeji.payment.plugin.PAY_CANCEL_ACTON"
+        const val ACTION = "com.coffeeji.payment.plugin.PAY_CANCEL_ACTION"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -21,8 +21,8 @@ class CancelPayReceiver : BaseBroadReceiver() {
 
         val orderId = intent.getStringExtra("ORDER_ID")
         val orderMoney = intent.getStringExtra("ORDER_MONEY")
-        Logger.i(TAG, "PAY_CANCEL_ACTON received. ORDER_ID=${orderId}")
-        Logger.i(TAG, "PAY_CANCEL_ACTON received. ORDER_MONEY=${orderMoney}")
+        Logger.i(TAG, "PAY_CANCEL_ACTION received. ORDER_ID=${orderId}")
+        Logger.i(TAG, "PAY_CANCEL_ACTION received. ORDER_MONEY=${orderMoney}")
 
         CommandBuilder.removePayResult()
         val request = CommandBuilder.buildCancelPaymentCommand { success, message ->
@@ -46,7 +46,7 @@ class CancelPayReceiver : BaseBroadReceiver() {
             log("取消发送支付指令异常: ${e.message}")
         }
 
-        log("PAY_CANCEL_ACTON received. ORDER_ID=${orderId}")
-        log("PAY_CANCEL_ACTON received. ORDER_MONEY=${orderMoney}")
+        log("PAY_CANCEL_ACTION received. ORDER_ID=${orderId}")
+        log("PAY_CANCEL_ACTION received. ORDER_MONEY=${orderMoney}")
     }
 }
