@@ -25,7 +25,7 @@ class StartPayReceiver : BaseBroadReceiver() {
     companion object {
         private const val TAG = "PaymentPlugin.StartPayReceiver"
 
-        const val ACTION = "com.coffeeji.payment.plugin.PAY_ACTON"
+        const val ACTION = "com.coffeeji.payment.plugin.PAY_ACTION"
 
         const val RESULT_ACTION = "com.coffeeji.payment.plugin.PAY_STATE_ACTION"
     }

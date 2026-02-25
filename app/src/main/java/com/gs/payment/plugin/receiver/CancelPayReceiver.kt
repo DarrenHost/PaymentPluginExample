@@ -10,7 +10,7 @@ class CancelPayReceiver : BaseBroadReceiver() {
 
     companion object {
         private const val TAG = "PaymentPlugin.CancelPayReceiver"
-        const val ACTION = "com.coffeeji.payment.plugin.PAY_CANCEL_ACTON"
+        const val ACTION = "com.coffeeji.payment.plugin.PAY_CANCEL_ACTION"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
