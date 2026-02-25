@@ -39,23 +39,5 @@ object SerialPortConfig {
             .getString(KEY_DEVICE_PATH, DEFAULT_SOCKET_IP)
             ?: DEFAULT_SOCKET_IP
     }
-    
-    /**
-     * 保存socket端口号
-     */
-    fun saveSocketPort(context: Context, port: Int) {
-        getSharedPreferences(context)
-            .edit()
-            .putInt(KEY_SOCKET_PORT, port)
-            .apply()
-    }
-    
-    /**
-     * 获取socket端口号
-     */
-    fun getSocketPort(context: Context): Int {
-        return getSharedPreferences(context)
-            .getInt(KEY_SOCKET_PORT, DEFAULT_SOCKET_PORT)
-    }
 
 }

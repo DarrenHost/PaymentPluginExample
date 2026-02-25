@@ -2,11 +2,9 @@ package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
-import com.gs.payment.plugin.manager.AsciiSocketManager
-import com.gs.payment.plugin.manager.Constants
+import com.gs.payment.plugin.manager.CommandUtils
+import com.gs.payment.plugin.manager.PaymentOrderCallback
 import com.gs.payment.plugin.utils.Logger
-import com.mg.switchgpio.manager.CommandEnum
-import com.mg.switchgpio.manager.CommandUtils
 
 class FeedbackPayReceiver : BaseBroadReceiver() {
 
@@ -29,7 +27,29 @@ class FeedbackPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "MAKE_STATE_ACTION received. ORDER_MONEY=${orderMoney}")
         Logger.i(TAG, "MAKE_STATE_ACTION received. STATE=${state}")
 
-        CommandUtils.sendCommand(AsciiSocketManager, CommandEnum.ANULACION, Constants.TRANSACTION_AMOUNT)
+        if (state == "success"){
+            //订单完成
+            CommandUtils.orderComplete(orderId.toString(), object : PaymentOrderCallback {
+                override fun onSuccess(code: Int, data: String) {
+                    Logger.i(TAG, "订单完成: $data")
+                }
 
+                override fun onFailure(errorMessage: String) {
+                    Logger.i(TAG, "订单失败: $errorMessage")
+                }
+            })
+        }else{
+            // 发起退款订单
+            CommandUtils.refundOrder(orderId.toString(), orderMoney.toString(), state.toString(), object :
+                PaymentOrderCallback {
+                override fun onSuccess(code: Int, data: String) {
+                    Logger.i(TAG, "退款订单成功: $data")
+                }
+
+                override fun onFailure(errorMessage: String) {
+                    Logger.e(TAG, "退款订单失败: $errorMessage")
+                }
+            })
+        }
     }
 }

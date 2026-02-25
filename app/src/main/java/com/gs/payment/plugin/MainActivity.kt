@@ -54,16 +54,11 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.await
-import com.gs.payment.plugin.domain.CommandBuilder
 import com.gs.payment.plugin.service.PaymentService
 import com.gs.payment.plugin.utils.Logger
 import com.gs.payment.plugin.utils.SerialPortConfig
 import com.gs.payment.plugin.work.MonitoringWorker
-import com.ok.serialport.jni.SerialPortFinder
-import com.ok.serialport.utils.ByteUtils
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -108,12 +103,6 @@ class MainActivity : ComponentActivity() {
         
         // 启动MonitoringWorker（如果未启动）
         startMonitoringWorkerIfNeeded()
-
-        val command = CommandBuilder.buildTestCommand { b, s ->
-
-        }
-        val hexStr = ByteUtils.byteArrToHexStr(command.data)
-        Logger.i(TAG, hexStr)
     }
 
     override fun onDestroy() {
@@ -217,25 +206,11 @@ class MainActivity : ComponentActivity() {
     private fun startPay() {
         val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
         intent.setPackage(packageName)
-        intent.putExtra("ORDER_ID", "100001")
-        intent.putExtra("ORDER_MONEY", "0.01")
-        intent.putExtra("PRODUCT_ID", "1002001")
+        intent.putExtra("ORDER_ID", "100003")
+        intent.putExtra("ORDER_MONEY", "0.10")
+        intent.putExtra("PRODUCT_ID", "1002003")
         intent.putExtra("PRODUCT_NAME", "Test the product name")
-        sendBroadcast(intent)
-    }
-
-    /**
-     * Initiate payment - Scanner
-     * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
-     */
-    private fun startPayScan() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
-        intent.setPackage(packageName)
-        intent.putExtra("ORDER_ID", "100001")
-        intent.putExtra("ORDER_MONEY", "0.01")
-        intent.putExtra("PRODUCT_ID", "1002001")
-        intent.putExtra("PRODUCT_NAME", "Test the product name")
-        intent.putExtra("SCAN_CODE", "a1223454565")
+        intent.putExtra("ATTACH_CODE", "deviceNo=E01654&deviceId=247b3c45ba8b829b")
         sendBroadcast(intent)
     }
 
@@ -246,8 +221,8 @@ class MainActivity : ComponentActivity() {
     private fun cancelPay() {
         val intent = Intent("com.coffeeji.payment.plugin.PAY_CANCEL_ACTON")
         intent.setPackage(packageName)
-        intent.putExtra("ORDER_ID", "100001")
-        intent.putExtra("ORDER_MONEY", "0.01")
+        intent.putExtra("ORDER_ID", "100003")
+        intent.putExtra("ORDER_MONEY", "0.10")
         sendBroadcast(intent)
     }
 
@@ -258,8 +233,8 @@ class MainActivity : ComponentActivity() {
     private fun feedbackPay(isSuccess: Boolean) {
         val intent = Intent("com.coffeeji.payment.plugin.MAKE_STATE_ACTION")
         intent.setPackage(packageName)
-        intent.putExtra("ORDER_ID", "100001")
-        intent.putExtra("ORDER_MONEY", "0.01")
+        intent.putExtra("ORDER_ID", "100003")
+        intent.putExtra("ORDER_MONEY", "0.10")
         intent.putExtra("STATE", if (isSuccess) "success" else "fail")
         sendBroadcast(intent)
     }
@@ -276,11 +251,6 @@ class MainActivity : ComponentActivity() {
             mutableStateOf(SerialPortConfig.getSocketIp(context))
         }
         
-        // socket端口
-        val currentSocketPort = remember {
-            mutableStateOf(SerialPortConfig.getSocketPort(context).toString())
-        }
-        
         // 对话框显示状态
         val showDialog = remember { mutableStateOf(false) }
 
@@ -293,21 +263,14 @@ class MainActivity : ComponentActivity() {
         
         // 处理socket配置确认
         fun onConfirmSerialPortSelection() {
-            if (currentDevicePath.value.isNotEmpty() && currentSocketPort.value.isNotEmpty()) {
+            if (currentDevicePath.value.isNotEmpty()) {
                 try {
-                    val port = currentSocketPort.value.toInt()
-                    if (port <= 0 || port > 65535) {
-                        Logger.e(TAG, "无效的端口号: $port")
-                        return
-                    }
                     
                     // 保存配置
                     SerialPortConfig.saveSocketIp(context, currentDevicePath.value)
-                    SerialPortConfig.saveSocketPort(context, port)
-                    
                     // 关闭对话框
                     showDialog.value = false
-                    
+
                     // 重启服务
                     coroutineScope.launch {
                         try {
@@ -317,13 +280,13 @@ class MainActivity : ComponentActivity() {
                             kotlinx.coroutines.delay(500)
                             // 启动服务
                             PaymentService.start(context)
-                            Logger.i(TAG, "socket已更新为: ${currentDevicePath.value}:${port}，服务已重启")
+                            Logger.i(TAG, "socket已更新为: ${currentDevicePath.value}:，服务已重启")
                         } catch (e: Exception) {
                             Logger.e(TAG, "重启服务失败", e)
                         }
                     }
                 } catch (e: NumberFormatException) {
-                    Logger.e(TAG, "端口号格式错误: ${currentSocketPort.value}")
+                    Logger.e(TAG, "错误: ${e.message}")
                 }
             }
         }
@@ -344,7 +307,7 @@ class MainActivity : ComponentActivity() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "${currentDevicePath.value}:${SerialPortConfig.getSocketPort(context)}",
+                                text = currentDevicePath.value,
                                 modifier = Modifier.padding(end = 4.dp),
                                 fontSize = 14.sp,
                                 color = Color.Black
@@ -443,7 +406,23 @@ class MainActivity : ComponentActivity() {
                             cancelPay()
                         }
                     ) {
-                        Text("Cancel payment")
+                        Text("Order payment")
+                    }
+
+                    Button(
+                        onClick = {
+                            feedbackPay(false)
+                        }
+                    ) {
+                        Text("Refund payment")
+                    }
+
+                    Button(
+                        onClick = {
+                            feedbackPay(true)
+                        }
+                    ) {
+                        Text("Feedback payment")
                     }
                 }
             }
@@ -455,7 +434,7 @@ class MainActivity : ComponentActivity() {
                 onDismissRequest = { showDialog.value = false },
                 title = {
                     Text(
-                        text = "输入socket路径",
+                        text = "输入http路径",
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -469,20 +448,12 @@ class MainActivity : ComponentActivity() {
                             singleLine = true,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        
-                        // 端口号输入框
-                        TextField(
-                            value = currentSocketPort.value,
-                            onValueChange = { currentSocketPort.value = it },
-                            label = { Text("端口号") },
-                            singleLine = true
-                        )
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = { onConfirmSerialPortSelection() },
-                        enabled = currentDevicePath.value.isNotEmpty() && currentSocketPort.value.isNotEmpty()
+                        enabled = currentDevicePath.value.isNotEmpty()
                     ) {
                         Text("确认")
                     }

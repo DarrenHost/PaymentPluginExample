@@ -12,7 +12,7 @@ object Constants {
   //交易金额
   var TRANSACTION_AMOUNT: String = ""
 
-  //交易金额代码
-  var TRANSACTION_AMOUNT_CODE: String = ""
+  //thirdOrderNo
+  var THIRD_ORDER_NO: String = ""
 
 }

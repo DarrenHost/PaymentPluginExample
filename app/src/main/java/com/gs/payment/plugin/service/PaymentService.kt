@@ -13,7 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.gs.payment.plugin.R
-import com.gs.payment.plugin.manager.AsciiSocketManager
+import com.gs.payment.plugin.http.Api
 import com.gs.payment.plugin.utils.SerialPortConfig
 import com.gs.payment.plugin.work.RestartWatchWorker
 import java.util.concurrent.TimeUnit
@@ -54,8 +54,7 @@ class PaymentService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // 从配置读取socket IP和端口号
         val socketIp = SerialPortConfig.getSocketIp(this)
-        val socketPort = SerialPortConfig.getSocketPort(this)
-        AsciiSocketManager.connect(socketIp, socketPort, null)
+        Api.url = socketIp
         return START_STICKY
     }
 
@@ -89,8 +88,6 @@ class PaymentService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        //关闭socket
-        AsciiSocketManager.disconnect()
         // 启动重启任务
         restartWork(this)
     }
@@ -103,4 +100,3 @@ class PaymentService : Service() {
         WorkManager.getInstance(context).enqueue(workRequest)
     }
 }
-

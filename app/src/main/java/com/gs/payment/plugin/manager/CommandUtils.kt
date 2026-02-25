@@ -1,147 +1,151 @@
-package com.mg.switchgpio.manager
+package com.gs.payment.plugin.manager
 
 import android.util.Log
-import com.gs.payment.plugin.manager.AsciiSocketManager
-import com.gs.payment.plugin.manager.Constants
-import com.gs.payment.plugin.manager.SocketCallback
-import java.math.BigDecimal
-import java.math.RoundingMode
+import com.gs.payment.plugin.http.Api
+import com.gs.payment.plugin.http.HttpUtil
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import org.json.JSONObject
+import java.io.IOException
 import java.util.Calendar
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 
 object CommandUtils {
-    //支付金额
-    const val payMoney: String = "00201200000000"
 
-    //收银员编号
-    const val cashierNo: String = "0030073412345"
-
-    //序列号
-    const val serialNo: String = "004006000260"
-
-    //货币代码
-    const val currencyCode: String = "012003504"
-
-    //日期
-    const val date: String = "014008"
-
-    //时间
-    const val time: String = "015006"
-
-    //日期
-    var senddate: String = "018008"
-
-    //时间
-    var sendtime: String = "019006"
-
-    //发送命令
-    fun sendCommand(socketManager: AsciiSocketManager, commandType: CommandEnum, money: String, callback: SocketCallback? = null) {
-        var str = ""
-        val commandCode = commandType.getCode()
-        val bigDecimal = BigDecimal(money)
-        val multiplied = bigDecimal.multiply(BigDecimal.valueOf(100))
-        val result = multiplied.setScale(0, RoundingMode.DOWN).toString().padStart(4, '0')
-
-        if (commandType == CommandEnum.ANULACION) {
-            str =
-                commandCode + cashierNo + serialNo + Constants.TRACE_NO + date + getDate() + time + getTime()
-
-        } else if (commandType == CommandEnum.DEVOLUCION) {
-            str =
-                commandCode + cashierNo + serialNo + Constants.TRACE_NO + payMoney + result + currencyCode + senddate + sendtime + date + getDate() + time + getTime()
-        } else if (commandType == CommandEnum.VENTA) {
-            senddate += getDate()
-            sendtime += getTime()
-            str =
-                commandCode + payMoney + result + cashierNo + serialNo + currencyCode + date + getDate() + time + getTime()
-        } else if (commandType == CommandEnum.CONFIRMACION) {
-            str =
-                commandCode + cashierNo + serialNo + payMoney + result + currencyCode + Constants.TRACE_NO + Constants.CARD_NO + Constants.CARD_EXPIRY_DATE + date + getDate() + time + getTime()
-        }
-        Log.d("CommandUtils", "sendCommand: $str")
-        socketManager.sendAsciiMessage(str, callback)
-    }
-
-    //获取日日月月年年年年 （jjmmaaaa）
-    fun getDate(): String {
-        val calendar = Calendar.getInstance()
-        val year = calendar[Calendar.YEAR]
-        val month = calendar[Calendar.MONTH] + 1
-        val day = calendar[Calendar.DAY_OF_MONTH]
-        return String.format("%02d%02d%04d", day, month, year)
-    }
-
-    //获取时时分分秒秒
-    fun getTime(): String {
-        val calendar = Calendar.getInstance()
-        val hour = calendar[Calendar.HOUR_OF_DAY]
-        val minute = calendar[Calendar.MINUTE]
-        val second = calendar[Calendar.SECOND]
-        return String.format("%02d%02d%02d", hour, minute, second)
-    }
-
-
-    fun parseTransactionData(data: String): Map<String, String> {
-        val result = mutableMapOf<String, String>()
-
-        // 1. 提取订单号 (008006000015)
-        val orderPattern: Pattern = Pattern.compile("0080060\\d{5}")
-        val orderMatcher: Matcher = orderPattern.matcher(data)
-        if (orderMatcher.find()) {
-            result["订单号"] = orderMatcher.group()
-            Constants.TRACE_NO = orderMatcher.group()
-        }
-
-        // 2. 提取银行卡号 (0070164984513124707724)
-        val cardPattern: Pattern = Pattern.compile("007016\\d{16}")
-        val cardMatcher: Matcher = cardPattern.matcher(data)
-        if (cardMatcher.find()) {
-            result["银行卡号"] = cardMatcher.group()
-            Constants.CARD_NO = cardMatcher.group()
-        }
-
-        // 3. 提取有效时间 (0170043308)
-        val expiryPattern: Pattern = Pattern.compile("01700\\d{5}")
-        val expiryMatcher: Matcher = expiryPattern.matcher(data)
-        if (expiryMatcher.find()) {
-            result["有效时间"] = expiryMatcher.group()
-            Constants.CARD_EXPIRY_DATE = expiryMatcher.group()
-        }
-
-        return result
-    }
-
-    /**
-     * 发送支付命令并接收支付结果回调
-     * @param socketManager Socket管理器
-     * @param commandType 命令类型
-     * @param money 金额
-     * @param callback 支付结果回调
-     */
-    fun sendPaymentCommand(
-        socketManager: AsciiSocketManager, 
-        commandType: CommandEnum, 
-        money: String, 
-        callback: AsciiSocketManager.PaymentResultCallback
+    //Http。发起支付订单
+    fun sendPaymentOrder(
+        orderId: String,
+        orderMoney: Int,
+        productId: String?,
+        productName: String?,
+        attach: String?,
+        callback: PaymentOrderCallback
     ) {
-        var str = ""
-        val commandCode = commandType.getCode()
-        val bigDecimal = BigDecimal(money)
-        val multiplied = bigDecimal.multiply(BigDecimal.valueOf(100))
-        val result = multiplied.setScale(0, RoundingMode.DOWN).toString().padStart(4, '0')
-        if (commandType == CommandEnum.VENTA) {
-            senddate += getDate()
-            sendtime += getTime()
-            str = commandCode + payMoney + result + cashierNo + serialNo + currencyCode + date + getDate() + time + getTime()
-        }
+        val jsonObject = JSONObject()
+        jsonObject.put("orderNo", orderId)
+        jsonObject.put("totalAmount", orderMoney)
+        jsonObject.put("objectId", productId)
+        jsonObject.put("subject", productName)
+        jsonObject.put("attach", attach)
+        jsonObject.put("notifyUrl", "https://tryml.free.beeceptor.com")
 
-        Log.d("CommandUtils", "sendPaymentCommand: $str")
-        
-        // 使用订单ID或时间戳作为消息ID
-        val messageId = System.currentTimeMillis().toString()
-        
-        // 发送支付消息并注册回调
-        socketManager.sendPaymentMessage(str, messageId, null, callback)
+        Log.d("CommandUtils", "发送支付订单请求: ${jsonObject.toString()}")
+
+        HttpUtil.asyncPostJson(Api.selectUrl, null, jsonObject.toString(), object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("CommandUtils", "支付订单请求失败: ${e.message}")
+                callback.onFailure(e.message ?: "未知错误")
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val responseBody = response.body?.string()
+                Log.d("CommandUtils", "支付订单响应: $responseBody")
+
+                if (response.isSuccessful) {
+                    callback.onSuccess(response.code, responseBody ?: "")
+                } else {
+                    Log.e("CommandUtils", "支付订单请求失败，状态码: ${response.code}")
+                    callback.onFailure("请求失败，状态码: ${response.code}")
+                }
+            }
+        })
     }
+
+    //Http。查询订单
+    fun queryOrder(orderId: String, callback: PaymentOrderCallback) {
+        val jsonObject = JSONObject()
+        jsonObject.put("orderNo", orderId)
+        jsonObject.put("thirdOrderNo", Constants.THIRD_ORDER_NO)
+        Log.d("CommandUtils", "发送订单查询请求: ${jsonObject.toString()}")
+
+        HttpUtil.asyncPostJson(Api.orderStatusUrl, null, jsonObject.toString(), object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("CommandUtils", "查询订单请求失败: ${e.message}")
+                callback.onFailure(e.message ?: "未知错误")
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val responseBody = response.body?.string()
+                Log.d("CommandUtils", "查询订单响应: $responseBody")
+
+                if (response.isSuccessful) {
+                    callback.onSuccess(response.code, responseBody ?: "")
+                } else {
+                    Log.e("CommandUtils", "查询订单请求失败，状态码: ${response.code}")
+                    callback.onFailure("请求失败，状态码: ${response.code}")
+                }
+            }
+        })
+
+    }
+
+    //退款订单
+    fun refundOrder(
+        orderId: String, orderMoney: String,
+        state: String,
+        callback: PaymentOrderCallback
+    ) {
+        val jsonObject = JSONObject()
+        jsonObject.put("orderNo", orderId)
+        //移除订单号前缀A
+        val refundNo = if (orderId.startsWith("A")) orderId.substring(1) else orderId
+        jsonObject.put("refundNo", "RD$refundNo")
+        jsonObject.put("thirdOrderNo", Constants.THIRD_ORDER_NO)
+        jsonObject.put("refundAmount", orderMoney)
+        jsonObject.put("refundReason", "Production failed")
+        jsonObject.put("refundNotifyUrl", "https://tryml.free.beeceptor.com")
+        Log.d("CommandUtils", "发送订单退款请求: ${jsonObject.toString()}")
+        HttpUtil.asyncPostJson(Api.refundUrl, null, jsonObject.toString(), object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("CommandUtils", "退款订单请求失败: ${e.message}")
+                callback.onFailure(e.message ?: "未知错误")
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val responseBody = response.body?.string()
+                Log.d("CommandUtils", "退款订单响应: $responseBody")
+            }
+
+        })
+    }
+
+    //订单完成
+    fun orderComplete(
+        orderId: String,
+        callback: PaymentOrderCallback
+    ) {
+        val jsonObject = JSONObject()
+        jsonObject.put("orderNo", orderId)
+        jsonObject.put("thirdOrderNo", Constants.THIRD_ORDER_NO)
+        jsonObject.put("success", true)
+        jsonObject.put("orderStatus", "2")
+        jsonObject.put("outStockStatus", "2")
+        jsonObject.put("outStockTime", getTime())
+        Log.d("CommandUtils", "发送订单完成请求: ${jsonObject.toString()}")
+        HttpUtil.asyncPostJson(Api.completeUrl, null, jsonObject.toString(), object : Callback {
+
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("CommandUtils", "订单完成请求失败: ${e.message}")
+                callback.onFailure(e.message ?: "未知错误")
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val responseBody = response.body?.string()
+                Log.d("CommandUtils", "订单完成响应: $responseBody")
+            }
+        })
+    }
+
+    //获取年月日时分秒 2026-02-24 23:48:55
+    fun getTime(): String {
+        val c = Calendar.getInstance()
+        val year = c.get(Calendar.YEAR)
+        val month = String.format("%02d", c.get(Calendar.MONTH) + 1)
+        val day = String.format("%02d", c.get(Calendar.DAY_OF_MONTH))
+        val hour = String.format("%02d", c.get(Calendar.HOUR_OF_DAY))
+        val minute = String.format("%02d", c.get(Calendar.MINUTE))
+        val second = String.format("%02d", c.get(Calendar.SECOND))
+        return "$year-$month-$day $hour:$minute:$second"
+    }
+
 }

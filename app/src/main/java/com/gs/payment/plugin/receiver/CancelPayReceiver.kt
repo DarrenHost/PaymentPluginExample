@@ -2,12 +2,9 @@ package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
-import com.gs.payment.plugin.domain.CommandBuilder
-import com.gs.payment.plugin.manager.AsciiSocketManager
-import com.gs.payment.plugin.manager.Constants
+import com.gs.payment.plugin.manager.CommandUtils
+import com.gs.payment.plugin.manager.PaymentOrderCallback
 import com.gs.payment.plugin.utils.Logger
-import com.mg.switchgpio.manager.CommandEnum
-import com.mg.switchgpio.manager.CommandUtils
 
 class CancelPayReceiver : BaseBroadReceiver() {
 
@@ -28,10 +25,18 @@ class CancelPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "PAY_CANCEL_ACTON received. ORDER_MONEY=${orderMoney}")
 
         try {
-            CommandUtils.sendCommand(AsciiSocketManager, CommandEnum.ANULACION, Constants.TRANSACTION_AMOUNT)
+            CommandUtils.queryOrder(orderId.toString(), object : PaymentOrderCallback {
+                override fun onSuccess(code: Int, data: String) {
+                    Logger.i(TAG, "查询订单成功: $data")
+                }
+
+                override fun onFailure(errorMessage: String) {
+                    Logger.e(TAG, "查询订单失败: $errorMessage")
+                }
+            })
             Logger.i(TAG, "取消支付指令已发送")
         } catch (e: Exception) {
-            Logger.e(TAG,"取消发送支付指令异常: ${e.message}")
+            Logger.e(TAG, "取消发送支付指令异常: ${e.message}")
         }
 
         log("PAY_CANCEL_ACTON received. ORDER_ID=${orderId}")
