@@ -11,7 +11,7 @@ class StartPayReceiver : BaseBroadReceiver() {
     companion object {
         private const val TAG = "PaymentPlugin.StartPayReceiver"
 
-        const val ACTION = "com.coffeeji.payment.plugin.PAY_ACTON"
+        const val ACTION = "com.coffeeji.payment.plugin.PAY_ACTION"
 
         const val RESULT_ACTION = "com.coffeeji.payment.plugin.PAY_STATE_ACTION"
     }
@@ -27,17 +27,17 @@ class StartPayReceiver : BaseBroadReceiver() {
         val productId = intent.getStringExtra("PRODUCT_ID")
         val productName = intent.getStringExtra("PRODUCT_NAME")
         val scanCode = intent.getStringExtra("SCAN_CODE")
-        Log.i(TAG, "PAY_ACTON received. ORDER_ID=${orderId}")
-        Log.i(TAG, "PAY_ACTON received. ORDER_MONEY=${orderMoney}")
-        Log.i(TAG, "PAY_ACTON received. PRODUCT_ID=${productId}")
-        Log.i(TAG, "PAY_ACTON received. PRODUCT_NAME=${productName}")
-        Log.i(TAG, "PAY_ACTON received. SCAN_CODE=${scanCode}")
+        Log.i(TAG, "PAY_ACTION received. ORDER_ID=${orderId}")
+        Log.i(TAG, "PAY_ACTION received. ORDER_MONEY=${orderMoney}")
+        Log.i(TAG, "PAY_ACTION received. PRODUCT_ID=${productId}")
+        Log.i(TAG, "PAY_ACTION received. PRODUCT_NAME=${productName}")
+        Log.i(TAG, "PAY_ACTION received. SCAN_CODE=${scanCode}")
 
-        log("PAY_ACTON received. ORDER_ID=${orderId}")
-        log("PAY_ACTON received. ORDER_MONEY=${orderMoney}")
-        log("PAY_ACTON received. PRODUCT_ID=${productId}")
-        log("PAY_ACTON received. PRODUCT_NAME=${productName}")
-        log("PAY_ACTON received. SCAN_CODE=${scanCode}")
+        log("PAY_ACTION received. ORDER_ID=${orderId}")
+        log("PAY_ACTION received. ORDER_MONEY=${orderMoney}")
+        log("PAY_ACTION received. PRODUCT_ID=${productId}")
+        log("PAY_ACTION received. PRODUCT_NAME=${productName}")
+        log("PAY_ACTION received. SCAN_CODE=${scanCode}")
 
         if (orderId.isNullOrBlank()) {
             sendResult(context, false, "invalid orderId", "")
