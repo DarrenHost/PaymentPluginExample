@@ -28,8 +28,18 @@ class FeedbackPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "MAKE_STATE_ACTION received. ORDER_ID=${orderId}")
         Logger.i(TAG, "MAKE_STATE_ACTION received. ORDER_MONEY=${orderMoney}")
         Logger.i(TAG, "MAKE_STATE_ACTION received. STATE=${state}")
-
+        if (state == "success"){
+            return
+        }
+        // 取消支付
         CommandUtils.sendCommand(AsciiSocketManager, CommandEnum.ANULACION, Constants.TRANSACTION_AMOUNT)
-
+        //延迟5秒
+        try {
+            Thread.sleep(5000)
+            //撤销确认支付
+            CommandUtils.sendCommand(AsciiSocketManager, CommandEnum.DEVOLUCION, Constants.TRANSACTION_AMOUNT)
+        }catch (e:Exception){
+            Logger.e(TAG,"取消发送支付指令异常: ${e.message}")
+        }
     }
 }

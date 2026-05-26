@@ -2,7 +2,6 @@ package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
-import com.gs.payment.plugin.domain.CommandBuilder
 import com.gs.payment.plugin.manager.AsciiSocketManager
 import com.gs.payment.plugin.manager.Constants
 import com.gs.payment.plugin.utils.Logger
@@ -29,6 +28,10 @@ class CancelPayReceiver : BaseBroadReceiver() {
 
         try {
             CommandUtils.sendCommand(AsciiSocketManager, CommandEnum.ANULACION, Constants.TRANSACTION_AMOUNT)
+
+            Thread.sleep(5000)
+            //撤销确认支付
+            CommandUtils.sendCommand(AsciiSocketManager, CommandEnum.DEVOLUCION, Constants.TRANSACTION_AMOUNT)
             Logger.i(TAG, "取消支付指令已发送")
         } catch (e: Exception) {
             Logger.e(TAG,"取消发送支付指令异常: ${e.message}")

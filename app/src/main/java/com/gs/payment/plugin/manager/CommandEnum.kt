@@ -12,7 +12,7 @@ enum class CommandEnum(
     VENTA("001003001", "销售"),
 
     // 退货命令
-    DEVOLUCION("001004003", "退货"),
+    DEVOLUCION("001003004", "退货"),
 
     // 查询命令
     CONSULTA("001003010", "查询"),
