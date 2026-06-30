@@ -30,10 +30,10 @@ object CommandUtils {
     const val time: String = "015006"
 
     //日期
-    var senddate: String = "018008"
+    val senddate: String = "018008"
 
     //时间
-    var sendtime: String = "019006"
+    val sendtime: String = "019006"
 
     //发送命令
     fun sendCommand(socketManager: AsciiSocketManager, commandType: CommandEnum, money: String, callback: SocketCallback? = null) {
@@ -49,10 +49,8 @@ object CommandUtils {
 
         } else if (commandType == CommandEnum.DEVOLUCION) {
             str =
-                commandCode + cashierNo + serialNo + Constants.TRACE_NO + payMoney + result + currencyCode + senddate + sendtime + date + getDate() + time + getTime()
+                commandCode + cashierNo + serialNo + Constants.TRACE_NO + payMoney + result + currencyCode + senddate + getDate() + sendtime + getTime() + date + getDate() + time + getTime()
         } else if (commandType == CommandEnum.VENTA) {
-            senddate += getDate()
-            sendtime += getTime()
             str =
                 commandCode + payMoney + result + cashierNo + serialNo + currencyCode + date + getDate() + time + getTime()
         } else if (commandType == CommandEnum.CONFIRMACION) {
@@ -131,8 +129,6 @@ object CommandUtils {
         val multiplied = bigDecimal.multiply(BigDecimal.valueOf(100))
         val result = multiplied.setScale(0, RoundingMode.DOWN).toString().padStart(4, '0')
         if (commandType == CommandEnum.VENTA) {
-            senddate += getDate()
-            sendtime += getTime()
             str = commandCode + payMoney + result + cashierNo + serialNo + currencyCode + date + getDate() + time + getTime()
         }
 
