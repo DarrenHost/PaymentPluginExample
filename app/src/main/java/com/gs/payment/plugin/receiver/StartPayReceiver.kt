@@ -2,9 +2,7 @@ package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
-import com.gs.payment.plugin.domain.CommandBuilder
+import com.gs.payment.plugin.domain.NewCapPosCommandBuilder
 import com.gs.payment.plugin.domain.SerialPortManager
 import com.gs.payment.plugin.utils.Logger
 
@@ -78,32 +76,43 @@ class StartPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
         log("准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
 
-        // 构建并发送支付指令
-        val request = CommandBuilder.buildPaymentCommand(
-            serialNumber = serialNumber,
-            amount = amount,
-            timeout = 60,
-            action = { success, message ->
-                if (success) {
-                    Logger.e(TAG, "等待支付结果")
-                    log("等待支付结果")
-                    CommandBuilder.waitPayResult { isSuccess, msg ->
-                        Logger.i(TAG, "收到支付结果: $isSuccess")
-                        log("收到支付结果: $isSuccess")
-                        if (isSuccess) {
-                            sendResult(context, true, "支付成功", orderMoney)
-                        } else {
-                            sendResult(context, false, msg ?: "支付失败", orderMoney)
-                        }
-                    }
-                } else {
-                    val errorMessage = message ?: "支付指令发送失败"
-                    Logger.e(TAG, "支付指令发送失败: $errorMessage")
-                    log("支付指令发送失败: $errorMessage")
-                    sendResult(context, false, errorMessage, orderMoney)
-                }
+        val request = NewCapPosCommandBuilder.buildPayCmd(amount, action = { success, message ->
+            Logger.i(TAG, "result = $success , mes = $message")
+            if (success) {
+                log("扣费成功")
+                sendResult(context, true, "支付成功", orderMoney)
+            } else {
+                log("扣费失败，$message")
+                sendResult(context, false, message ?: "支付指令发送失败", orderMoney)
             }
-        )
+        })
+
+        // 构建并发送支付指令
+//        val request = CommandBuilder.buildPaymentCommand(
+//            serialNumber = serialNumber,
+//            amount = amount,
+//            timeout = 60,
+//            action = { success, message ->
+//                if (success) {
+//                    Logger.e(TAG, "等待支付结果")
+//                    log("等待支付结果")
+//                    CommandBuilder.waitPayResult { isSuccess, msg ->
+//                        Logger.i(TAG, "收到支付结果: $isSuccess")
+//                        log("收到支付结果: $isSuccess")
+//                        if (isSuccess) {
+//                            sendResult(context, true, "支付成功", orderMoney)
+//                        } else {
+//                            sendResult(context, false, msg ?: "支付失败", orderMoney)
+//                        }
+//                    }
+//                } else {
+//                    val errorMessage = message ?: "支付指令发送失败"
+//                    Logger.e(TAG, "支付指令发送失败: $errorMessage")
+//                    log("支付指令发送失败: $errorMessage")
+//                    sendResult(context, false, errorMessage, orderMoney)
+//                }
+//            }
+//        )
 
         try {
             SerialPortManager.send(request)

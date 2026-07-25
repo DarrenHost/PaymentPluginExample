@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -107,8 +108,13 @@ class MainActivity : ComponentActivity() {
             ScrollableLogApp(logList)
         }
         val filter = IntentFilter(LOG_ACTION)
-        registerReceiver(receiver, filter)
-        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(receiver, filter)
+        }
+
+
         // 启动PaymentService（如果未启动）
         startPaymentServiceIfNeeded()
         
@@ -220,7 +226,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun startPay() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
+        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTION")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "0.01")
@@ -234,7 +240,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun startPayScan() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
+        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTION")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "0.01")
@@ -249,7 +255,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun cancelPay() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_CANCEL_ACTON")
+        val intent = Intent("com.coffeeji.payment.plugin.PAY_CANCEL_ACTION")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "0.01")

@@ -3,6 +3,7 @@ package com.gs.payment.plugin.receiver
 import android.content.Context
 import android.content.Intent
 import com.gs.payment.plugin.domain.CommandBuilder
+import com.gs.payment.plugin.domain.NewCapPosCommandBuilder
 import com.gs.payment.plugin.domain.SerialPortManager
 import com.gs.payment.plugin.utils.Logger
 
@@ -25,7 +26,7 @@ class CancelPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "PAY_CANCEL_ACTION received. ORDER_MONEY=${orderMoney}")
 
         CommandBuilder.removePayResult()
-        val request = CommandBuilder.buildCancelPaymentCommand { success, message ->
+        val request = NewCapPosCommandBuilder.buildCancelPayCmd { success, message ->
             if (success) {
                 val resultMessage = message ?: "取消支付指令发送成功"
                 Logger.i(TAG, "取消支付指令发送成功: $resultMessage")

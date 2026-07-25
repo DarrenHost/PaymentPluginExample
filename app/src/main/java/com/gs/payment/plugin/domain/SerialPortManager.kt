@@ -41,7 +41,7 @@ object SerialPortManager {
             .stickPacketHandle(StickPacketHandle())
             .addResponseRule(object : ResponseRule {
                 override fun match(request: Request?, receive: ByteArray): Boolean {
-                    return receive[1] == 0xE0.toByte()
+                    return receive[3] == 0x01.toByte()
                 }
             })
             .build()

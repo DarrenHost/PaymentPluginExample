@@ -1,5 +1,6 @@
-package com.gs.payment.plugin.domain
+﻿package com.gs.payment.plugin.domain
 
+import com.gs.payment.plugin.utils.ByteUtil
 import com.gs.payment.plugin.utils.Logger
 import com.ok.serialport.stick.AbsStickPacketHandle
 import java.io.EOFException
@@ -10,11 +11,13 @@ import java.io.InterruptedIOException
 /**
  * 数据包拆包处理器
  * 数据包格式：
- * - 包头：固定为 0xAA (1字节)
+ * - 包头：固定为 0x5A (1字节)
+ * - 包序号：流水号 (2字节，大端序)
+ * - 命令类别：固定为 0x01 (1字节)
  * - 命令码：操作类型 (1字节)
- * - 数据长度：参数长度 (1字节，最大255)
  * - 数据：参数内容 (N字节)
- * - 校验和：前面所有数据的累加和，取低字节 (1字节)
+ * 
+ * - LRC校验和：前面所有数据的累加和，取低字节 (1字节)
  * 
  * @author Leyi
  * @date 2024/10/24 15:45
@@ -26,11 +29,11 @@ class StickPacketHandle : AbsStickPacketHandle {
         // 固定缓冲区大小，减少内存分配
         private const val BUFFER_SIZE = 4096
         // 包头标识
-        private const val PACKET_HEADER = 0xAA.toByte()
-        // 最小数据包长度：包头(1) + 命令码(1) + 数据长度(1) + 校验和(1) = 4字节
-        private const val MIN_PACKET_SIZE = 4
-        // 最大数据包长度：包头(1) + 命令码(1) + 数据长度(1) + 数据(255) + 校验和(1) = 259字节
-        private const val MAX_PACKET_SIZE = 259
+        private const val PACKET_HEADER = 0x5A.toByte()
+        // 最小数据包长度：包头(1) + 包序号(2) + 命令类别(1) + 命令码(1) + 数据长度(2) + 数据(0) + 校验和(1) = 8字节
+        private const val MIN_PACKET_SIZE = 6
+        // 最大数据包长度：包头(1) + 包序号(2) + 命令类别(1) + 命令码(1) + 数据长度(2) + 数据(65535) + 校验和(1) = 65543字节
+        private const val MAX_PACKET_SIZE = 512
     }
 
     // 数据缓冲区，用于处理粘包和不完整数据
@@ -50,6 +53,8 @@ class StickPacketHandle : AbsStickPacketHandle {
                 } else {
                     buffer
                 }
+                Logger.w(TAG,"readMsg  size = $size  data = ${ByteUtil.bytesToHex(newData)}")
+
                 dataBuffer.addAll(newData.toList())
                 
                 // 尝试从缓冲区中解析完整的数据包
@@ -88,7 +93,7 @@ class StickPacketHandle : AbsStickPacketHandle {
                 for (i in dataBuffer.indices) {
                     discardedData[i] = dataBuffer[i]
                 }
-                Logger.w(TAG, "未找到包头，丢弃数据: ${bytesToHex(discardedData)}")
+                Logger.w(TAG, "未找到包头，丢弃数据: ${ByteUtil.bytesToHex(discardedData)}")
                 dataBuffer.clear()
                 return null
             }
@@ -99,31 +104,36 @@ class StickPacketHandle : AbsStickPacketHandle {
                 for (i in 0 until headerIndex) {
                     discardedData[i] = dataBuffer[i]
                 }
-                Logger.w(TAG, "包头前存在无效数据，丢弃: ${bytesToHex(discardedData)}")
+                Logger.w(TAG, "包头前存在无效数据，丢弃: ${ByteUtil.bytesToHex(discardedData)}")
                 repeat(headerIndex) { dataBuffer.removeAt(0) }
             }
             
             // 检查是否有足够的数据读取数据长度字段
-            if (dataBuffer.size < 3) {
+            if (dataBuffer.size < 6) {
                 // 数据不完整，等待更多数据
                 return null
             }
             
-            // 读取数据长度（索引2的位置）
-            val dataLength = dataBuffer[2].toInt() and 0xFF
-            
-            // 计算完整数据包长度：包头(1) + 命令码(1) + 数据长度(1) + 数据(N) + 校验和(1)
+            // 读取数据长度（下标5-6，大端序）
+            val cmdCode = dataBuffer[4]
+            // 取消扣费回复没有数据域
+            var dataLength = if (cmdCode.toInt() == 0x54) 0 else (ByteUtil.bytesToInt(dataBuffer.toByteArray(), 5,2))
+            Logger.w(TAG, "dataLength = $dataLength")
+            if (dataLength > 0) {
+                dataLength+=2
+            }
+            // 计算完整数据包长度：包头(1) + 包序号(2) + 命令类别(1) + 命令码(1) + 数据长度(2) + 数据(N) + 校验和(1)
             val packetSize = MIN_PACKET_SIZE + dataLength
             
             // 检查数据包长度是否合法
             if (packetSize > MAX_PACKET_SIZE) {
                 // 数据包长度异常，丢弃包头，继续查找下一个包头
                 val discardedByte = dataBuffer[0]
-                Logger.w(TAG, "数据包长度异常($packetSize > $MAX_PACKET_SIZE)，丢弃包头: ${bytesToHex(byteArrayOf(discardedByte))}")
+                Logger.w(TAG, "数据包长度异常($packetSize > $MAX_PACKET_SIZE)，丢弃包头: ${ByteUtil.bytesToHex(byteArrayOf(discardedByte))}")
                 dataBuffer.removeAt(0)
                 continue
             }
-            
+            Logger.w(TAG, "dataBuffer size  = ${dataBuffer.size} ")
             // 检查是否有足够的数据组成完整的数据包
             if (dataBuffer.size < packetSize) {
                 // 数据不完整，等待更多数据
@@ -137,13 +147,14 @@ class StickPacketHandle : AbsStickPacketHandle {
             }
             
             // 验证校验和
-            if (validateChecksum(packet)) {
+            Logger.w(TAG, "check = ${validateChecksum2(packet)}")
+            if (validateChecksum2(packet)) {
                 // 校验通过，移除已处理的数据
                 repeat(packetSize) { dataBuffer.removeAt(0) }
                 return packet
             } else {
                 // 校验失败，丢弃包头，继续查找下一个包头
-                Logger.w(TAG, "校验和验证失败，丢弃数据包: ${bytesToHex(packet)}")
+                Logger.w(TAG, "校验和验证失败，丢弃数据包: ${ByteUtil.bytesToHex(packet)}")
                 dataBuffer.removeAt(0)
                 continue
             }
@@ -186,16 +197,30 @@ class StickPacketHandle : AbsStickPacketHandle {
         // 取低字节
         val calculatedChecksum = checksum and 0xFF
         val receivedChecksum = packet[packet.size - 1].toInt() and 0xFF
-        
+        Logger.w(TAG, "calculatedChecksum = $calculatedChecksum  receivedChecksum=$receivedChecksum" )
         return calculatedChecksum == receivedChecksum
     }
 
+
     /**
-     * 将字节数组转换为十六进制字符串，用于日志输出
-     * @param bytes 字节数组
-     * @return 十六进制字符串，格式如 "AA 01 02 03"
+     *  采用LRC校验，为除起始字符外其他数据的异或值
      */
-    private fun bytesToHex(bytes: ByteArray): String {
-        return bytes.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+    private fun validateChecksum2(packet: ByteArray): Boolean {
+        if (packet.size < MIN_PACKET_SIZE) {
+            return false
+        }
+
+        // 计算校验和：为除起始字符外其他数据的异或值
+        // 校验和字段是最后一个字节
+        var checksum = 0
+        for (i in 1 until packet.size - 1) {
+            checksum = checksum xor (packet[i].toInt() and 0xFF)
+        }
+        // 取低字节
+        val calculatedChecksum = checksum and 0xFF
+        val receivedChecksum = packet[packet.size - 1].toInt() and 0xFF
+        Logger.w(TAG, "calculatedChecksum = $calculatedChecksum  receivedChecksum=$receivedChecksum" )
+        return calculatedChecksum == receivedChecksum
     }
+
 }
