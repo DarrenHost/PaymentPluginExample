@@ -32,12 +32,11 @@ object NewCapPosCommandBuilder {
     /**
      *  扣费指令
      */
-    fun buildPayCmd(amount: Int, action: ((Boolean, String?) -> Unit)): Request {
+    fun buildPayCmd(amount: Int, action: ((Boolean,Int, String?) -> Unit)): Request {
         val amountBytes = ByteUtil.intToBytes(amount, 4)
         val sendPacket = getSendCmdPacket(PAY_CODE, amountBytes)
         return Request(sendPacket)
-            .timeout(15000)
-            .timeoutRetry(1)
+            .timeout(30000)
             .addResponseRule(object : ResponseRule{
                 override fun match(request: Request?, receive: ByteArray): Boolean {
                      return receive[4] == 0x52.toByte()
@@ -45,7 +44,7 @@ object NewCapPosCommandBuilder {
             })
             .onResponseListener(object : OnResponseListener {
                 override fun onFailure(request: Request?, e: Exception) {
-                    action.invoke(false, e.message)
+                    action.invoke(false, 0xff, e.message)
                 }
 
                 override fun onResponse(response: Response) {
@@ -56,32 +55,32 @@ object NewCapPosCommandBuilder {
                             val dataLength =   ByteUtil.bytesToInt(responseData,5,2)
                             val contentByte = ByteArray(dataLength)
                             System.arraycopy(responseData,8,contentByte,0,dataLength-1)
-                            val beforeAmount = ByteUtil.bytesToInt(contentByte,10,4)
+                            val costAmount = ByteUtil.bytesToInt(contentByte,10,4)
                             val afterAmount = ByteUtil.bytesToInt(contentByte, 14, 4)
-                            Logger.w("posPayResult", " content = ${ByteUtil.bytesToHex(contentByte)} beforeAmount =$beforeAmount  afterAmount= $afterAmount")
-                            action.invoke(true, null)
+                            Logger.w("posPayResult", " content = ${ByteUtil.bytesToHex(contentByte)} costAmount =$costAmount  afterAmount= $afterAmount")
+                            action.invoke(true, 0x00, null)
                         }
-                        0x01.toByte() -> action.invoke(false, "校验失败")
-                        0x02.toByte() -> action.invoke(false, "帧序号错误")
-                        0x03.toByte() -> action.invoke(false, "不支持该命令")
-                        0x04.toByte() -> action.invoke(false, "无卡")
-                        0x05.toByte() -> action.invoke(false, "交易失败")
+                        0x01.toByte() -> action.invoke(false, 0x01, "校验失败")
+                        0x02.toByte() -> action.invoke(false, 0x02, "帧序号错误")
+                        0x03.toByte() -> action.invoke(false, 0x03, "不支持该命令")
+                        0x04.toByte() -> action.invoke(false, 0x04, "无卡")
+                        0x05.toByte() -> action.invoke(false, 0x05, "交易失败")
                         0x06.toByte() -> {
                             Logger.w("posPayResult", "0x06 交易未决")
-                            action.invoke(false, "交易未决")
+//                            action.invoke(false, "交易未决")
                         }
-                        0x07.toByte() -> action.invoke(false, "未决超时")
-                        0x08.toByte() -> action.invoke(false, "卡号不一致（交易失败或未决时出现）")
-                        0x10.toByte() -> action.invoke(false, "系统平台错误")
-                        0x20.toByte() -> action.invoke(false, "POS错误1（POS未开通）")
-                        0x21.toByte() -> action.invoke(false, "POS错误2（硬件问题）")
-                        0x31.toByte() -> action.invoke(false, "卡错误1 （读卡失败）")
-                        0x32.toByte() -> action.invoke(false, "卡错误2  (卡限额)")
-                        0x33.toByte() -> action.invoke(false, "卡错误3  (余额不足）")
-                        0x34.toByte() -> action.invoke(false, "卡错误4  (卡失效)")
-                        0x35.toByte() -> action.invoke(false, "卡错误5  (卡禁用)")
-                        0x41.toByte() -> action.invoke(false, "交易失败")
-                        else -> action.invoke(false, "未知异常")
+                        0x07.toByte() -> action.invoke(false, 0x07,  "未决超时")
+                        0x08.toByte() -> action.invoke(false, 0x08,"卡号不一致（交易失败或未决时出现）")
+                        0x10.toByte() -> action.invoke(false, 0x10, "系统平台错误")
+                        0x20.toByte() -> action.invoke(false, 0x20, "POS错误1（POS未开通）")
+                        0x21.toByte() -> action.invoke(false, 0x21, "POS错误2（硬件问题）")
+                        0x31.toByte() -> action.invoke(false, 0x31, "卡错误1 （读卡失败）")
+                        0x32.toByte() -> action.invoke(false, 0x32, "卡错误2  (卡限额)")
+                        0x33.toByte() -> action.invoke(false, 0x33, "卡错误3  (余额不足）")
+                        0x34.toByte() -> action.invoke(false, 0x34, "卡错误4  (卡失效)")
+                        0x35.toByte() -> action.invoke(false, 0x35,"卡错误5  (卡禁用)")
+                        0x41.toByte() -> action.invoke(false, 0x41,"交易失败")
+                        else -> action.invoke(false, 0xff, "未知异常")
                     }
                 }
             })

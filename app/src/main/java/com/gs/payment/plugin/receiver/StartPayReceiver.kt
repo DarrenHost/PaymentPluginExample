@@ -1,4 +1,4 @@
-package com.gs.payment.plugin.receiver
+﻿package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
@@ -76,16 +76,8 @@ class StartPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
         log("准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
 
-        val request = NewCapPosCommandBuilder.buildPayCmd(amount, action = { success, message ->
-            Logger.i(TAG, "result = $success , mes = $message")
-            if (success) {
-                log("扣费成功")
-                sendResult(context, true, "支付成功", orderMoney)
-            } else {
-                log("扣费失败，$message")
-                sendResult(context, false, message ?: "支付指令发送失败", orderMoney)
-            }
-        })
+
+        sendPayment(context, amount, orderMoney, retryCount = 0)
 
         // 构建并发送支付指令
 //        val request = CommandBuilder.buildPaymentCommand(
@@ -114,14 +106,37 @@ class StartPayReceiver : BaseBroadReceiver() {
 //            }
 //        )
 
+    }
+
+
+    private fun sendPayment(context: Context, amount: Int, orderMoney: String, retryCount: Int){
+        val request = NewCapPosCommandBuilder.buildPayCmd(amount) { success, errorCode, message ->
+            Logger.i(TAG, "收到支付结果: $success  msg = $message")
+            log("收到支付结果:  $success  msg = $message")
+            when {
+                success -> {
+                    sendResult(context, true, "支付成功", orderMoney)
+                }
+                // 无卡重试一次  可重试错误码 + 未超过最大重试次数
+                errorCode == 0x04 && retryCount < 1 -> {
+                    sendPayment(context, amount, orderMoney, retryCount + 1)
+                }
+                else -> {
+                    sendResult(context, false, message ?: "支付指令发送失败", orderMoney)
+                }
+            }
+        }
+        // 发送指令
         try {
             SerialPortManager.send(request)
         } catch (e: Exception) {
             Logger.e(TAG, "发送支付指令异常", e)
             log("发送支付指令异常: ${e.message}")
+            // 发送异常也视为失败，按重试逻辑处理（将code设为-1，message设为异常信息）
             sendResult(context, false, "发送指令异常: ${e.message}", "")
         }
     }
+
 
     private fun sendResult(
         ctx: Context,

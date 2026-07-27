@@ -147,7 +147,6 @@ class StickPacketHandle : AbsStickPacketHandle {
             }
             
             // 验证校验和
-            Logger.w(TAG, "check = ${validateChecksum2(packet)}")
             if (validateChecksum2(packet)) {
                 // 校验通过，移除已处理的数据
                 repeat(packetSize) { dataBuffer.removeAt(0) }
@@ -219,7 +218,7 @@ class StickPacketHandle : AbsStickPacketHandle {
         // 取低字节
         val calculatedChecksum = checksum and 0xFF
         val receivedChecksum = packet[packet.size - 1].toInt() and 0xFF
-        Logger.w(TAG, "calculatedChecksum = $calculatedChecksum  receivedChecksum=$receivedChecksum" )
+//        Logger.w(TAG, "calculatedChecksum = $calculatedChecksum  receivedChecksum=$receivedChecksum" )
         return calculatedChecksum == receivedChecksum
     }
 

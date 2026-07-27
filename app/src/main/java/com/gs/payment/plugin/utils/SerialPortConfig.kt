@@ -11,7 +11,7 @@ import android.content.SharedPreferences
 object SerialPortConfig {
     private const val PREF_NAME = "serial_port_config"
     private const val KEY_DEVICE_PATH = "device_path"
-    private const val DEFAULT_DEVICE_PATH = "/dev/ttyS7"
+    private const val DEFAULT_DEVICE_PATH = "/dev/ttyS9"
 
     /**
      * 获取 SharedPreferences
