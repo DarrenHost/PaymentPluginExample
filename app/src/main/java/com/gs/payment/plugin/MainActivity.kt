@@ -64,6 +64,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.gs.payment.plugin.domain.CommandBuilder
+import com.gs.payment.plugin.receiver.CancelPayReceiver
+import com.gs.payment.plugin.receiver.FeedbackPayReceiver
+import com.gs.payment.plugin.receiver.StartPayReceiver
 import com.gs.payment.plugin.utils.SerialPortConfig
 import com.ok.serialport.jni.SerialPortFinder
 import com.ok.serialport.jni.model.Device
@@ -220,7 +223,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun startPay() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
+        val intent = Intent(StartPayReceiver.ACTION)
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "0.01")
@@ -234,7 +237,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun startPayScan() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
+        val intent = Intent(StartPayReceiver.ACTION)
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "0.01")
@@ -249,7 +252,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun cancelPay() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_CANCEL_ACTON")
+        val intent = Intent(CancelPayReceiver.ACTION)
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "0.01")
@@ -261,7 +264,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun feedbackPay(isSuccess: Boolean) {
-        val intent = Intent("com.coffeeji.payment.plugin.MAKE_STATE_ACTION")
+        val intent = Intent(FeedbackPayReceiver.ACTION)
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "0.01")
