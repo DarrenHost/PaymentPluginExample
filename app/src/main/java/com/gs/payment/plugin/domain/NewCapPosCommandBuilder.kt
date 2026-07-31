@@ -32,14 +32,17 @@ object NewCapPosCommandBuilder {
     /**
      *  扣费指令
      */
-    fun buildPayCmd(amount: Int, action: ((Boolean,Int, String?) -> Unit)): Request {
+    fun buildPayCmd(amount: Int, action: ((Boolean, Int, String?) -> Unit)): Request {
         val amountBytes = ByteUtil.intToBytes(amount, 4)
         val sendPacket = getSendCmdPacket(PAY_CODE, amountBytes)
         return Request(sendPacket)
             .timeout(30000)
-            .addResponseRule(object : ResponseRule{
+            .addResponseRule(object : ResponseRule {
                 override fun match(request: Request?, receive: ByteArray): Boolean {
-                     return receive[4] == 0x52.toByte()
+                    if (request == null) return false
+                    // 扣费命令名码 0xA2  应答码 0x52 且包序号对应
+                    return (request.data[4].toInt() and 0xFF == 0xA2 && receive[4].toInt() and 0xFF == 0x52)
+                            && (ByteUtil.bytesToInt(request.data, 1, 2) == ByteUtil.bytesToInt(receive, 1, 2))
                 }
             })
             .onResponseListener(object : OnResponseListener {

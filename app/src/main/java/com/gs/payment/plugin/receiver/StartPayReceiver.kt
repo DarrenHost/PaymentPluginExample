@@ -110,19 +110,27 @@ class StartPayReceiver : BaseBroadReceiver() {
 
 
     private fun sendPayment(context: Context, amount: Int, orderMoney: String, retryCount: Int){
+        var hasResultSuccess = false
+        var hasResultFail = false
         val request = NewCapPosCommandBuilder.buildPayCmd(amount) { success, errorCode, message ->
             Logger.i(TAG, "收到支付结果: $success  msg = $message")
             log("收到支付结果:  $success  msg = $message")
             when {
                 success -> {
-                    sendResult(context, true, "支付成功", orderMoney)
+                    if (!hasResultSuccess) {
+                        hasResultSuccess = true
+                        sendResult(context, true, "支付成功", orderMoney)
+                    }
                 }
                 // 无卡重试一次  可重试错误码 + 未超过最大重试次数
                 errorCode == 0x04 && retryCount < 1 -> {
                     sendPayment(context, amount, orderMoney, retryCount + 1)
                 }
                 else -> {
-                    sendResult(context, false, message ?: "支付指令发送失败", orderMoney)
+                    if (!hasResultFail) {
+                        hasResultFail = true
+                        sendResult(context, false, message ?: "支付指令发送失败", orderMoney)
+                    }
                 }
             }
         }
