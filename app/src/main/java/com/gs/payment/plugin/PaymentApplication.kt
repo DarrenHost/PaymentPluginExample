@@ -2,6 +2,7 @@ package com.gs.payment.plugin
 
 import android.app.Application
 import android.os.Environment
+import android.util.Log
 import com.elvishew.xlog.LogConfiguration
 import com.elvishew.xlog.LogLevel
 import com.elvishew.xlog.XLog
@@ -53,8 +54,12 @@ class PaymentApplication : Application() {
     private fun getLogPath(): String {
         val path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/A_GSWYData/PaymentPlugin"
         val logDir = File(path)
-        if (!logDir.exists()) {
-            logDir.mkdirs()
+        try {
+            if (!logDir.exists() && !logDir.mkdirs()) {
+                Log.w("PaymentPlugin", "创建日志目录失败，请检查存储权限: $path")
+            }
+        } catch (e: Exception) {
+            Log.w("PaymentPlugin", "创建日志目录异常: $path", e)
         }
         return logDir.absolutePath
     }
