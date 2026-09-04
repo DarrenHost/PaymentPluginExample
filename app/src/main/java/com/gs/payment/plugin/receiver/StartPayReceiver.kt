@@ -2,9 +2,10 @@
 
 import android.content.Context
 import android.content.Intent
-import com.gs.payment.plugin.domain.NewCapPosCommandBuilder
-import com.gs.payment.plugin.domain.SerialPortManager
+import com.gs.payment.plugin.mdb.MdbCardPaymentManager
 import com.gs.payment.plugin.utils.Logger
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 class StartPayReceiver : BaseBroadReceiver() {
 
@@ -27,17 +28,17 @@ class StartPayReceiver : BaseBroadReceiver() {
         val productId = intent.getStringExtra("PRODUCT_ID")
         val productName = intent.getStringExtra("PRODUCT_NAME")
         val scanCode = intent.getStringExtra("SCAN_CODE")
-        Logger.i(TAG, "PAY_ACTION received. ORDER_ID=${orderId}")
-        Logger.i(TAG, "PAY_ACTION received. ORDER_MONEY=${orderMoney}")
-        Logger.i(TAG, "PAY_ACTION received. PRODUCT_ID=${productId}")
-        Logger.i(TAG, "PAY_ACTION received. PRODUCT_NAME=${productName}")
-        Logger.i(TAG, "PAY_ACTION received. SCAN_CODE=${scanCode}")
+        Logger.i(TAG, "PAY_ACTION received. ORDER_ID=$orderId")
+        Logger.i(TAG, "PAY_ACTION received. ORDER_MONEY=$orderMoney")
+        Logger.i(TAG, "PAY_ACTION received. PRODUCT_ID=$productId")
+        Logger.i(TAG, "PAY_ACTION received. PRODUCT_NAME=$productName")
+        Logger.i(TAG, "PAY_ACTION received. SCAN_CODE=$scanCode")
 
-        log("PAY_ACTION received. ORDER_ID=${orderId}")
-        log("PAY_ACTION received. ORDER_MONEY=${orderMoney}")
-        log("PAY_ACTION received. PRODUCT_ID=${productId}")
-        log("PAY_ACTION received. PRODUCT_NAME=${productName}")
-        log("PAY_ACTION received. SCAN_CODE=${scanCode}")
+        log("PAY_ACTION received. ORDER_ID=$orderId")
+        log("PAY_ACTION received. ORDER_MONEY=$orderMoney")
+        log("PAY_ACTION received. PRODUCT_ID=$productId")
+        log("PAY_ACTION received. PRODUCT_NAME=$productName")
+        log("PAY_ACTION received. SCAN_CODE=$scanCode")
 
         if (orderId.isNullOrBlank()) {
             sendResult(context, false, "invalid orderId", "")
@@ -47,104 +48,22 @@ class StartPayReceiver : BaseBroadReceiver() {
             sendResult(context, false, "invalid orderMoney", "")
             return
         }
-        val money = try {
-            orderMoney.toDoubleOrNull() ?: 0.0
-        } catch (e: Exception) {
+
+        val amountFen = parseAmountFen(orderMoney)
+        if (amountFen <= 0) {
             sendResult(context, false, "invalid orderMoney", "")
             return
         }
 
-        if (money <= 0) {
-            sendResult(context, false, "invalid orderMoney", "")
-            return
-        }
+        val appContext = context.applicationContext
+        val itemId = toMdbItemId(productId)
+        Logger.i(TAG, "准备发起MDB刷卡支付: orderId=$orderId, amount=${amountFen}分, itemId=$itemId")
+        log("准备发起MDB刷卡支付: orderId=$orderId, amount=${amountFen}分, itemId=$itemId")
 
-        // 检查串口是否连接
-        if (!SerialPortManager.isConnected()) {
-            Logger.w(TAG, "串口未连接，无法发送支付指令")
-            log("串口未连接，无法发送支付指令")
-            sendResult(context, false, "串口未连接", "")
-            return
-        }
-
-        // 转换金额为分（整数）
-        val amount = (money * 100).toInt()
-
-        // 格式化流水号：确保为16字节ASCII字符串
-        val serialNumber = formatSerialNumber(orderId)
-
-        Logger.i(TAG, "准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
-        log("准备发送支付指令: 流水号=$serialNumber, 金额=${amount}分, 超时=30秒")
-
-
-        sendPayment(context, amount, orderMoney, retryCount = 0)
-
-        // 构建并发送支付指令
-//        val request = CommandBuilder.buildPaymentCommand(
-//            serialNumber = serialNumber,
-//            amount = amount,
-//            timeout = 60,
-//            action = { success, message ->
-//                if (success) {
-//                    Logger.e(TAG, "等待支付结果")
-//                    log("等待支付结果")
-//                    CommandBuilder.waitPayResult { isSuccess, msg ->
-//                        Logger.i(TAG, "收到支付结果: $isSuccess")
-//                        log("收到支付结果: $isSuccess")
-//                        if (isSuccess) {
-//                            sendResult(context, true, "支付成功", orderMoney)
-//                        } else {
-//                            sendResult(context, false, msg ?: "支付失败", orderMoney)
-//                        }
-//                    }
-//                } else {
-//                    val errorMessage = message ?: "支付指令发送失败"
-//                    Logger.e(TAG, "支付指令发送失败: $errorMessage")
-//                    log("支付指令发送失败: $errorMessage")
-//                    sendResult(context, false, errorMessage, orderMoney)
-//                }
-//            }
-//        )
-
-    }
-
-
-    private fun sendPayment(context: Context, amount: Int, orderMoney: String, retryCount: Int){
-        var hasResultSuccess = false
-        var hasResultFail = false
-        val request = NewCapPosCommandBuilder.buildPayCmd(amount) { success, errorCode, message ->
-            Logger.i(TAG, "收到支付结果: $success  msg = $message")
-            log("收到支付结果:  $success  msg = $message")
-            when {
-                success -> {
-                    if (!hasResultSuccess) {
-                        hasResultSuccess = true
-                        sendResult(context, true, "支付成功", orderMoney)
-                    }
-                }
-                // 无卡重试一次  可重试错误码 + 未超过最大重试次数
-                errorCode == 0x04 && retryCount < 1 -> {
-                    sendPayment(context, amount, orderMoney, retryCount + 1)
-                }
-                else -> {
-                    if (!hasResultFail) {
-                        hasResultFail = true
-                        sendResult(context, false, message ?: "支付指令发送失败", orderMoney)
-                    }
-                }
-            }
-        }
-        // 发送指令
-        try {
-            SerialPortManager.send(request)
-        } catch (e: Exception) {
-            Logger.e(TAG, "发送支付指令异常", e)
-            log("发送支付指令异常: ${e.message}")
-            // 发送异常也视为失败，按重试逻辑处理（将code设为-1，message设为异常信息）
-            sendResult(context, false, "发送指令异常: ${e.message}", "")
+        MdbCardPaymentManager.startCardPayment(orderId, amountFen, itemId) { success, message ->
+            sendResult(appContext, success, message, orderMoney)
         }
     }
-
 
     private fun sendResult(
         ctx: Context,
@@ -160,25 +79,30 @@ class StartPayReceiver : BaseBroadReceiver() {
             TAG,
             "Sending PAY_STATE_ACTION: status=${if (success) "success" else "fail"}, message=$message, money=$money"
         )
-        log("Sending PAY_STATE_ACTION: status=${if (success) "success" else "fail"}, message=$message, money=$money")
         ctx.sendBroadcast(out)
     }
 
-    /**
-     * 格式化流水号，确保为16字节ASCII字符串
-     * 如果长度不足16字节，右侧补空格；如果超过16字节，截取前16字节
-     *
-     * @param orderId 原始订单ID
-     * @return 格式化后的16字节ASCII字符串
-     */
-    private fun formatSerialNumber(orderId: String): String {
-        // 移除非ASCII字符，只保留可打印的ASCII字符
-        val cleanId = orderId.filter { it.code in 32..126 }
-
-        return when {
-            cleanId.length == 16 -> cleanId
-            cleanId.length > 16 -> cleanId.substring(0, 16)
-            else -> cleanId.padEnd(16, ' ') // 右侧补空格到16字节
+    /** 金额字符串转分，避免 Double 精度误差。 */
+    private fun parseAmountFen(orderMoney: String): Long {
+        return try {
+            BigDecimal(orderMoney)
+                .movePointRight(2)
+                .setScale(0, RoundingMode.HALF_UP)
+                .toLong()
+        } catch (e: Exception) {
+            Logger.w(TAG, "金额转换失败: ${orderMoney}, ${e.message}")
+            0L
         }
+    }
+
+    /**
+     * 与原版 lib-hw-payment PayParams.toMdbItemId 一致：productId 收窄到低 16 位，
+     * 无效值或结果为 0 时使用 1。
+     */
+    private fun toMdbItemId(productId: String?): Int {
+        val raw = productId?.toLongOrNull() ?: return 1
+        if (raw <= 0L) return 1
+        val masked = (raw and 0xFFFFL).toInt()
+        return if (masked == 0) 1 else masked
     }
 }

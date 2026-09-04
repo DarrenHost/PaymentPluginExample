@@ -11,7 +11,9 @@ import android.content.SharedPreferences
 object SerialPortConfig {
     private const val PREF_NAME = "serial_port_config"
     private const val KEY_DEVICE_PATH = "device_path"
-    private const val DEFAULT_DEVICE_PATH = "/dev/ttyS9"
+    private const val DEFAULT_DEVICE_PATH = "/dev/ttyS3"
+    private const val KEY_MDB_CARD_LEVEL = "mdb_card_level"
+    const val DEFAULT_MDB_CARD_LEVEL = 3
 
     /**
      * 获取 SharedPreferences
@@ -43,4 +45,22 @@ object SerialPortConfig {
      * 获取默认串口路径
      */
     fun getDefaultDevicePath(): String = DEFAULT_DEVICE_PATH
+
+    /**
+     * 保存 MDB 刷卡等级
+     */
+    fun saveMdbCardLevel(context: Context, level: Int) {
+        getSharedPreferences(context)
+            .edit()
+            .putInt(KEY_MDB_CARD_LEVEL, level)
+            .apply()
+    }
+
+    /**
+     * 读取 MDB 刷卡等级
+     */
+    fun getMdbCardLevel(context: Context): Int {
+        return getSharedPreferences(context)
+            .getInt(KEY_MDB_CARD_LEVEL, DEFAULT_MDB_CARD_LEVEL)
+    }
 }

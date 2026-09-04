@@ -41,7 +41,7 @@ class PaymentApplication : Application() {
             .flattener(PatternFlattener("{d} {t}: {m}")) // 自定义日志格式
             .fileNameGenerator(LogFileNameGenerator()) // 指定日志文件名生成器
             .backupStrategy(NeverBackupStrategy()) // 指定日志文件备份策略，默认为 FileSizeBackupStrategy(1024 * 1024)
-            .cleanStrategy(FileLastModifiedCleanStrategy((1000 * 60 * 60 * 24 * 7).toLong())) // 指定日志文件清除策略，保留7天
+            .cleanStrategy(FileLastModifiedCleanStrategy((1000L * 60 * 60 * 24 * 7))) // 指定日志文件清除策略，保留7天
             .build()
 
         XLog.init(config, filePrinter, androidPrinter)
@@ -51,7 +51,7 @@ class PaymentApplication : Application() {
      * 获取日志文件路径
      */
     private fun getLogPath(): String {
-        val path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/A_GSWYData/PaymentPlugin"
+        val path = Environment.getExternalStorageDirectory().absolutePath + "/A_GSWYData/PaymentPlugin"
         val logDir = File(path)
         if (!logDir.exists()) {
             logDir.mkdirs()

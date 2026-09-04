@@ -2,9 +2,7 @@ package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
-import com.gs.payment.plugin.domain.CommandBuilder
-import com.gs.payment.plugin.domain.NewCapPosCommandBuilder
-import com.gs.payment.plugin.domain.SerialPortManager
+import com.gs.payment.plugin.mdb.MdbCardPaymentManager
 import com.gs.payment.plugin.utils.Logger
 
 class CancelPayReceiver : BaseBroadReceiver() {
@@ -22,32 +20,13 @@ class CancelPayReceiver : BaseBroadReceiver() {
 
         val orderId = intent.getStringExtra("ORDER_ID")
         val orderMoney = intent.getStringExtra("ORDER_MONEY")
-        Logger.i(TAG, "PAY_CANCEL_ACTION received. ORDER_ID=${orderId}")
-        Logger.i(TAG, "PAY_CANCEL_ACTION received. ORDER_MONEY=${orderMoney}")
+        Logger.i(TAG, "PAY_CANCEL_ACTION received. ORDER_ID=$orderId")
+        Logger.i(TAG, "PAY_CANCEL_ACTION received. ORDER_MONEY=$orderMoney")
+        log("PAY_CANCEL_ACTION received. ORDER_ID=$orderId")
+        log("PAY_CANCEL_ACTION received. ORDER_MONEY=$orderMoney")
 
-        CommandBuilder.removePayResult()
-        val request = NewCapPosCommandBuilder.buildCancelPayCmd { success, message ->
-            if (success) {
-                val resultMessage = message ?: "取消支付指令发送成功"
-                Logger.i(TAG, "取消支付指令发送成功: $resultMessage")
-                log("取消支付指令发送成功: $resultMessage")
-            } else {
-                val errorMessage = message ?: "取消支付指令发送失败"
-                Logger.e(TAG, "取消支付指令发送失败: $errorMessage")
-                log("取消支付指令发送失败: $errorMessage")
-            }
-        }
-
-        try {
-            SerialPortManager.send(request)
-            Logger.i(TAG, "取消支付指令已发送")
-            log("取消支付指令已发送")
-        } catch (e: Exception) {
-            Logger.e(TAG, "取消发送支付指令异常", e)
-            log("取消发送支付指令异常: ${e.message}")
-        }
-
-        log("PAY_CANCEL_ACTION received. ORDER_ID=${orderId}")
-        log("PAY_CANCEL_ACTION received. ORDER_MONEY=${orderMoney}")
+        // MDB 刷卡：撤销等待批准中的 Vend，并结束当前会话。
+        MdbCardPaymentManager.cancelCardPayment()
+        log("已请求取消MDB刷卡支付")
     }
 }

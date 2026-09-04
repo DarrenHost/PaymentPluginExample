@@ -14,6 +14,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.gs.payment.plugin.R
 import com.gs.payment.plugin.domain.SerialPortManager
+import com.gs.payment.plugin.mdb.MdbCardPaymentManager
 import com.gs.payment.plugin.utils.SerialPortConfig
 import com.gs.payment.plugin.work.RestartWatchWorker
 import java.util.concurrent.TimeUnit
@@ -56,6 +57,8 @@ class PaymentService : Service() {
         val devicePath = SerialPortConfig.getDevicePath(this)
         // 打开串口
         SerialPortManager.openSerialPort(devicePath, 9600)
+        val cardLevel = SerialPortConfig.getMdbCardLevel(this)
+        MdbCardPaymentManager.prepare(cardLevel)
         return START_STICKY
     }
 
@@ -89,8 +92,9 @@ class PaymentService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // 关闭串口
+        // 关闭串口并复位 MDB 会话
         SerialPortManager.closeSerialPort()
+        MdbCardPaymentManager.onSerialClosed()
         // 启动重启任务
         restartWork(this)
     }

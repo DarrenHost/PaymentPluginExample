@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -17,6 +18,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.await
+import com.gs.payment.plugin.mdb.MdbCardPaymentManager
 import com.gs.payment.plugin.service.PaymentService
 import com.gs.payment.plugin.work.MonitoringWorker
 import kotlinx.coroutines.launch
@@ -38,6 +40,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -114,7 +118,6 @@ class MainActivity : ComponentActivity() {
             registerReceiver(receiver, filter)
         }
 
-
         // 启动PaymentService（如果未启动）
         startPaymentServiceIfNeeded()
         
@@ -122,7 +125,6 @@ class MainActivity : ComponentActivity() {
         startMonitoringWorkerIfNeeded()
 
         val command = CommandBuilder.buildTestCommand { b, s ->
-
         }
         val hexStr = ByteUtils.byteArrToHexStr(command.data)
         Logger.i(TAG, hexStr)
@@ -292,7 +294,11 @@ class MainActivity : ComponentActivity() {
         
         // 串口列表状态
         val serialPortList = remember { mutableStateListOf<String>() }
-        
+
+        // MDB 等级
+        val currentMdbLevel = remember { mutableStateOf(SerialPortConfig.getMdbCardLevel(context)) }
+        val mdbLevelMenuExpanded = remember { mutableStateOf(false) }
+
         // 选中的串口路径
         val selectedDevicePath = remember { mutableStateOf("") }
 
@@ -360,6 +366,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        fun selectMdbLevel(level: Int) {
+            if (level != 2 && level != 3) return
+            val old = currentMdbLevel.value
+            currentMdbLevel.value = level
+            SerialPortConfig.saveMdbCardLevel(context, level)
+            Logger.i(TAG, "MDB等级设置: $old -> $level")
+            addLogMessage("MDB等级设置: $old -> $level，开始重新初始化")
+            MdbCardPaymentManager.changeCardLevelAndReinitialize(level) { ok, message ->
+                Logger.i(TAG, message)
+                addLogMessage(message)
+            }
+        }
+
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -386,6 +405,39 @@ class MainActivity : ComponentActivity() {
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit Serial Port",
                                     tint = Color.Black
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            TextButton(
+                                onClick = { mdbLevelMenuExpanded.value = true },
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(
+                                    text = "MDB刷卡器级别 ${currentMdbLevel.value}",
+                                    fontSize = 13.sp,
+                                    color = Color.Black
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = mdbLevelMenuExpanded.value,
+                                onDismissRequest = { mdbLevelMenuExpanded.value = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Level 2") },
+                                    onClick = {
+                                        mdbLevelMenuExpanded.value = false
+                                        selectMdbLevel(2)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Level 3") },
+                                    onClick = {
+                                        mdbLevelMenuExpanded.value = false
+                                        selectMdbLevel(3)
+                                    }
                                 )
                             }
                         }
