@@ -15,6 +15,8 @@ import com.ok.serialport.listener.OnResponseListener
  */
 object NewCapPosCommandBuilder {
 
+    private const val TAG = "NewCapPosCommandBuilder"
+
     // 包头
     private const val PACKET_HEADER = 0x5A.toByte()
 
@@ -28,11 +30,15 @@ object NewCapPosCommandBuilder {
 
     private var packageSerial = 0
 
+    // 最新扣费请求代际号，用于忽略旧请求的超时或迟到回调
+    private var activePayRequestId = 0L
+
 
     /**
      *  扣费指令
      */
     fun buildPayCmd(amount: Int, action: ((Boolean, Int, String?) -> Unit)): Request {
+        val requestId = ++activePayRequestId
         val amountBytes = ByteUtil.intToBytes(amount, 4)
         val sendPacket = getSendCmdPacket(PAY_CODE, amountBytes)
         return Request(sendPacket)
@@ -47,10 +53,18 @@ object NewCapPosCommandBuilder {
             })
             .onResponseListener(object : OnResponseListener {
                 override fun onFailure(request: Request?, e: Exception) {
+                    if (requestId != activePayRequestId) {
+                        Logger.w(TAG, "忽略过期扣费请求回调 requestId=$requestId currentId=$activePayRequestId error=${e.message}")
+                        return
+                    }
                     action.invoke(false, 0xff, e.message)
                 }
 
                 override fun onResponse(response: Response) {
+                    if (requestId != activePayRequestId) {
+                        Logger.w(TAG, "忽略过期扣费应答 requestId=$requestId currentId=$activePayRequestId data=${ByteUtil.bytesToHex(response.data)}")
+                        return
+                    }
                     Logger.w("posPayResult", "code =  ${response.data[7]}")
                     when (response.data[7]) {
                         0x00.toByte() -> {
@@ -100,7 +114,9 @@ object NewCapPosCommandBuilder {
             .timeoutRetry(1)
             .addResponseRule(object : ResponseRule {
                 override fun match(request: Request?, receive: ByteArray): Boolean {
+                    if (request == null) return false
                     return receive[4] == 0x54.toByte()
+                            && (ByteUtil.bytesToInt(request.data, 1, 2) == ByteUtil.bytesToInt(receive, 1, 2))
                 }
             })
             .onResponseListener(object : OnResponseListener {

@@ -41,6 +41,11 @@ class StickPacketHandle : AbsStickPacketHandle {
 
     override fun execute(inputStream: InputStream): ByteArray? {
         try {
+            // 优先处理缓冲区中的遗留完整包，避免依赖新数据触发读取
+            val packet = parsePacketFromBuffer()
+            if (packet != null) {
+                return packet
+            }
             // 使用固定大小缓冲区读取数据
             val buffer = ByteArray(BUFFER_SIZE)
             // 阻塞读取，直到有数据到达或流关闭
@@ -116,7 +121,10 @@ class StickPacketHandle : AbsStickPacketHandle {
             
             // 读取数据长度（下标5-6，大端序）
             val cmdCode = dataBuffer[4]
-            // 取消扣费回复没有数据域
+             // 取消扣费回复没有数据长度域
+            if (cmdCode.toInt() != 0x54 && dataBuffer.size < 8) {
+                return null
+            }
             var dataLength = if (cmdCode.toInt() == 0x54) 0 else (ByteUtil.bytesToInt(dataBuffer.toByteArray(), 5,2))
             Logger.w(TAG, "dataLength = $dataLength")
             if (dataLength > 0) {
