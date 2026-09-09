@@ -41,6 +41,13 @@ class StickPacketHandle : AbsStickPacketHandle {
 
     override fun execute(inputStream: InputStream): ByteArray? {
         try {
+
+            // 优先处理缓冲区中的遗留完整包，避免依赖新数据触发读取
+            val packet = parsePacketFromBuffer()
+            if (packet != null) {
+                return packet
+            }
+
             // 使用固定大小缓冲区读取数据
             val buffer = ByteArray(BUFFER_SIZE)
             // 阻塞读取，直到有数据到达或流关闭
