@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun startPay() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
+        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTION")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "10")
@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun startPayScan() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTON")
+        val intent = Intent("com.coffeeji.payment.plugin.PAY_ACTION")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "10")
@@ -129,7 +129,7 @@ class MainActivity : ComponentActivity() {
      * This method is limited to test data communication and does not contain business logic, and payment status control needs to be controlled by the business itself
      */
     private fun cancelPay() {
-        val intent = Intent("com.coffeeji.payment.plugin.PAY_CANCEL_ACTON")
+        val intent = Intent("com.coffeeji.payment.plugin.PAY_CANCEL_ACTION")
         intent.setPackage(packageName)
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "10")
