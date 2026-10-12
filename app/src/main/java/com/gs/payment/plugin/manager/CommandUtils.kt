@@ -64,24 +64,28 @@ object CommandUtils {
             jsonObject.put("thirdOrderNo", Constants.THIRD_ORDER_NO)
             Logger.i("CommandUtils", "发送订单查询请求: ${jsonObject.toString()}")
 
-            HttpUtil.asyncPostJson(Api.orderStatusUrl, null, jsonObject.toString(), object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    Logger.e("CommandUtils", "查询订单请求失败: ${e.message}")
-                    callback.onFailure(e.message ?: "未知错误")
-                }
-
-                override fun onResponse(call: Call, response: Response) {
-                    val responseBody = response.body?.string()
-                    Logger.i("CommandUtils", "查询订单响应: $responseBody")
-
-                    if (response.isSuccessful) {
-                        callback.onSuccess(response.code, responseBody ?: "")
-                    } else {
-                        Logger.e("CommandUtils", "查询订单请求失败，状态码: ${response.code}")
-                        callback.onFailure("请求失败，状态码: ${response.code}")
+            HttpUtil.asyncPostJson(
+                Api.orderStatusUrl,
+                null,
+                jsonObject.toString(),
+                object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        Logger.e("CommandUtils", "查询订单请求失败: ${e.message}")
+                        callback.onFailure(e.message ?: "未知错误")
                     }
-                }
-            })
+
+                    override fun onResponse(call: Call, response: Response) {
+                        val responseBody = response.body?.string()
+                        Logger.i("CommandUtils", "查询订单响应: $responseBody")
+
+                        if (response.isSuccessful) {
+                            callback.onSuccess(response.code, responseBody ?: "")
+                        } else {
+                            Logger.e("CommandUtils", "查询订单请求失败，状态码: ${response.code}")
+                            callback.onFailure("请求失败，状态码: ${response.code}")
+                        }
+                    }
+                })
         } catch (e: Exception) {
             Logger.e("CommandUtils", "构建订单查询请求异常", e)
             callback.onFailure("构建请求异常: ${e.message}")
@@ -152,6 +156,34 @@ object CommandUtils {
             })
         } catch (e: Exception) {
             Logger.e("CommandUtils", "构建订单完成请求异常", e)
+            callback.onFailure("构建请求异常: ${e.message}")
+        }
+    }
+
+    //取消支付
+    fun cancelOrder(
+        orderId: String,
+        callback: PaymentOrderCallback
+    ) {
+        try {
+            val jsonObject = JSONObject()
+            jsonObject.put("orderNo", orderId)
+            jsonObject.put("thirdOrderNo", Constants.THIRD_ORDER_NO)
+            Logger.i("CommandUtils", "发送订单取消请求: ${jsonObject.toString()}")
+            HttpUtil.asyncPostJson(Api.cancelUrl, null, jsonObject.toString(), object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    Logger.i("CommandUtils", "订单取消请求失败: ${e.message}")
+                    callback.onFailure(e.message ?: "未知错误")
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    val responseBody = response.body?.string()
+                    Logger.i("CommandUtils", "订单取消响应: $responseBody")
+                }
+            }
+            )
+        } catch (e: Exception) {
+            Logger.e("CommandUtils", "构建订单取消请求异常", e)
             callback.onFailure("构建请求异常: ${e.message}")
         }
     }

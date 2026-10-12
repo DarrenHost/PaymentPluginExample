@@ -25,13 +25,13 @@ class CancelPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "PAY_CANCEL_ACTON received. ORDER_MONEY=${orderMoney}")
 
         try {
-            CommandUtils.queryOrder(orderId.toString(), object : PaymentOrderCallback {
+            CommandUtils.cancelOrder(orderId.toString(), object : PaymentOrderCallback {
                 override fun onSuccess(code: Int, data: String) {
-                    Logger.i(TAG, "查询订单成功: $data")
+                    Logger.i(TAG, "取消订单成功: $data")
                 }
 
                 override fun onFailure(errorMessage: String) {
-                    Logger.e(TAG, "查询订单失败: $errorMessage")
+                    Logger.i(TAG, "取消订单失败: $errorMessage")
                 }
             })
             Logger.i(TAG, "取消支付指令已发送")

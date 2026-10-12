@@ -7,8 +7,8 @@ package com.gs.payment.plugin.http
  */
 object Api {
 
-    //正式环境
-    var url: String = "https://services.saltovending.igniterz.dev"
+    //正式环境 https://services.saltovending.igniterz.dev
+    var url: String = "https://services.apisconnector.posvending.lat"
 
     //创建订单信息
     var selectUrl: String = "$url/order/rcard"
@@ -21,5 +21,8 @@ object Api {
 
     //订单完成
     var completeUrl: String = "$url/order/complete"
+
+    //取消支付
+    var cancelUrl: String = "$url/order/cancel"
 
 }
