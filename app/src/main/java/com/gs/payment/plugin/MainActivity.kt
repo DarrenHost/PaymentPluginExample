@@ -4,7 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -26,7 +28,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -50,17 +52,34 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val LOG_ACTION = "com.gs.payment.plugin.LOG_ACTION"
         const val LOG_MESSAGE_KEY = "LOG_MESSAGE_KEY"
+        const val PAY_STATE_ACTION = "com.coffeeji.payment.plugin.PAY_STATE_ACTION"
     }
 
     private var logState: MutableList<String>? = null
+    private var keepAliveRunning: Boolean = false
     private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.let {
-                if (LOG_ACTION == intent.action) {
-                    val logMessage = intent.getStringExtra(LOG_MESSAGE_KEY)
-                    logMessage?.let {
-                        addLogMessage(logMessage)
+                when (it.action) {
+                    LOG_ACTION -> {
+                        val logMessage = it.getStringExtra(LOG_MESSAGE_KEY)
+                        logMessage?.let { addLogMessage(logMessage) }
                     }
+                    PAY_STATE_ACTION -> {
+                        // 插件输入页回传的结果（主应用侧也应监听此 action 获取账号密码）
+                        val state = it.getStringExtra("STATE")
+                        val message = it.getStringExtra("MESSAGE")
+                        val money = it.getStringExtra("MONEY")
+                        val account = it.getStringExtra("ACCOUNT")
+                        val password = it.getStringExtra("PASSWORD")
+                        val orderId = it.getStringExtra("ORDER_ID")
+                        addLogMessage(
+                            "收到回传: state=$state, orderId=$orderId, money=$money, " +
+                                "account=$account, password=${password?.let { p -> "*".repeat(p.length) }}"
+                        )
+                    }
+
+                    else -> {}
                 }
             }
         }
@@ -77,11 +96,16 @@ class MainActivity : ComponentActivity() {
         }
         val filter = IntentFilter(LOG_ACTION)
         registerReceiver(receiver, filter)
+        // 悬浮窗权限
+        requestOverlayPermission()
+        // 常驻前台服务
+        toggleKeepAliveService()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(receiver)
+        stopService(Intent(this, PayKeepAliveService::class.java))
     }
 
     fun addLogMessage(message: String) {
@@ -134,6 +158,30 @@ class MainActivity : ComponentActivity() {
         intent.putExtra("ORDER_ID", "100001")
         intent.putExtra("ORDER_MONEY", "10")
         sendBroadcast(intent)
+    }
+
+    /**
+     * 启用常驻前台服务。常驻后，插件在后台收到 PAY_ACTION 广播时
+     */
+    private fun toggleKeepAliveService() {
+        val intent = Intent(this, PayKeepAliveService::class.java)
+        ContextCompat.startForegroundService(this, intent)
+    }
+
+    /**
+     * 跳转到系统“在其他应用上层显示”设置页，授予 SYSTEM_ALERT_WINDOW 权限。
+     * 悬浮窗弹窗依赖该权限；Android 6+ 需用户手动授予。
+     */
+    private fun requestOverlayPermission() {
+        if (Settings.canDrawOverlays(this)) {
+            addLogMessage("悬浮窗权限已授予")
+        } else {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+        }
     }
 
     /**

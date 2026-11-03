@@ -1,10 +1,10 @@
-package com.gs.payment.plugin.receiver
+﻿package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
+import com.gs.payment.plugin.PayContract
+import com.gs.payment.plugin.PayKeepAliveService
 
 class StartPayReceiver : BaseBroadReceiver() {
 
@@ -40,32 +40,42 @@ class StartPayReceiver : BaseBroadReceiver() {
         log("PAY_ACTION received. SCAN_CODE=${scanCode}")
 
         if (orderId.isNullOrBlank()) {
-            sendResult(context, false, "invalid orderId", "")
+            sendResult(context, false, "invalid orderId", "", "", "")
             return
         }
 
-        Handler(Looper.getMainLooper())
-            .postDelayed({
-                try {
-                    sendResult(context, true, "", "11.0")
-                } catch (t: Throwable) {
-                    Log.e(TAG, "Error while sending PAY_STATE_ACTION", t)
-                    log("Error while sending PAY_STATE_ACTION:${t.message}")
-                    sendResult(context, false, "internal error", "11.0")
-                }
-            }, 5 * 1000)
+        // 功能验证：在后台收到支付广播后，交由常驻前台服务用 TYPE_APPLICATION_OVERLAY
+        try {
+            val showIntent = Intent(PayKeepAliveService.SHOW_INPUT_ACTION).apply {
+                putExtra(PayContract.EXTRA_ORDER_ID, orderId)
+                putExtra(PayContract.EXTRA_ORDER_MONEY, orderMoney)
+                putExtra(PayContract.EXTRA_PRODUCT_ID, productId)
+                putExtra(PayContract.EXTRA_PRODUCT_NAME, productName)
+                putExtra(PayContract.EXTRA_SCAN_CODE, scanCode)
+            }
+            context.sendBroadcast(showIntent)
+            log("Forwarded SHOW_INPUT_ACTION to PayKeepAliveService (overlay)")
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to forward SHOW_INPUT_ACTION", t)
+            log("Failed to forward SHOW_INPUT_ACTION: ${t.message}")
+            sendResult(context, false, "forward failed", orderMoney ?: "", "", orderId)
+        }
     }
 
     private fun sendResult(
         ctx: Context,
         success: Boolean,
         message: String,
-        money: String
+        money: String,
+        account: String,
+        password: String
     ) {
         val out = Intent(RESULT_ACTION)
             .putExtra("STATE", if (success) "success" else "fail")
             .putExtra("MESSAGE", message)
             .putExtra("MONEY", money)
+            .putExtra("ACCOUNT", account)
+            .putExtra("PASSWORD", password)
         Log.i(
             TAG,
             "Sending PAY_STATE_ACTION: status=${if (success) "success" else "fail"}, message=$message, money=$money"
