@@ -67,20 +67,18 @@ class StartPayReceiver : BaseBroadReceiver() {
         success: Boolean,
         message: String,
         money: String,
-        account: String,
-        password: String
+        password: String,
+        orderId: String
     ) {
+        val state = if (success) "success" else "fail"
         val out = Intent(RESULT_ACTION)
-            .putExtra("STATE", if (success) "success" else "fail")
+            .putExtra("STATE", state)
             .putExtra("MESSAGE", message)
             .putExtra("MONEY", money)
-            .putExtra("ACCOUNT", account)
             .putExtra("PASSWORD", password)
-        Log.i(
-            TAG,
-            "Sending PAY_STATE_ACTION: status=${if (success) "success" else "fail"}, message=$message, money=$money"
-        )
-        log("Sending PAY_STATE_ACTION: status=${if (success) "success" else "fail"}, message=$message, money=$money")
+            .putExtra("ORDER_ID", orderId)
+        Log.i(TAG, "Sending PAY_STATE_ACTION: state=$state, message=$message, orderId=$orderId")
+        log("Sending PAY_STATE_ACTION: state=$state, message=$message, orderId=$orderId")
         ctx.sendBroadcast(out)
     }
 }

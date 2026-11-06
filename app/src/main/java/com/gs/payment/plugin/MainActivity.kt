@@ -20,29 +20,41 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.gs.payment.plugin.ui.theme.GeekNeon
+import com.gs.payment.plugin.ui.theme.GeekPanel
+import com.gs.payment.plugin.ui.theme.GeekSurface
+import com.gs.payment.plugin.ui.theme.GeekText
+import com.gs.payment.plugin.ui.theme.PaymentPluginScannerTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -56,7 +68,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private var logState: MutableList<String>? = null
-    private var keepAliveRunning: Boolean = false
     private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.let {
@@ -66,16 +77,15 @@ class MainActivity : ComponentActivity() {
                         logMessage?.let { addLogMessage(logMessage) }
                     }
                     PAY_STATE_ACTION -> {
-                        // 插件输入页回传的结果（主应用侧也应监听此 action 获取账号密码）
+                        // 插件输入页回传的结果（主应用侧也应监听此 action 获取验证结果）
                         val state = it.getStringExtra("STATE")
                         val message = it.getStringExtra("MESSAGE")
                         val money = it.getStringExtra("MONEY")
-                        val account = it.getStringExtra("ACCOUNT")
                         val password = it.getStringExtra("PASSWORD")
                         val orderId = it.getStringExtra("ORDER_ID")
                         addLogMessage(
-                            "收到回传: state=$state, orderId=$orderId, money=$money, " +
-                                "account=$account, password=${password?.let { p -> "*".repeat(p.length) }}"
+                            "< 收到回传: state=$state, orderId=$orderId, money=$money, " +
+                                "message=$message, key=${password?.let { p -> "*".repeat(p.length) }}"
                         )
                     }
 
@@ -89,13 +99,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            val logList = remember { mutableStateListOf<String>() }
-            logState = logList
+            PaymentPluginScannerTheme {
+                val logList = remember { mutableStateListOf<String>() }
+                logState = logList
 
-            ScrollableLogApp(logList)
+                ScrollableLogApp(logList)
+            }
         }
-        val filter = IntentFilter(LOG_ACTION)
-        registerReceiver(receiver, filter)
+        val filter = IntentFilter(LOG_ACTION).apply {
+            addAction(PAY_STATE_ACTION)
+        }
+        ContextCompat.registerReceiver(
+            this,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         // 悬浮窗权限
         requestOverlayPermission()
         // 常驻前台服务
@@ -201,6 +220,56 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun ScrollableLogApp(logList: List<String>) {
         val lazyListState = rememberLazyListState()
+        var showPwdDialog by remember { mutableStateOf(false) }
+        var pwdInput by remember { mutableStateOf("") }
+
+        if (showPwdDialog) {
+            AlertDialog(
+                onDismissRequest = { showPwdDialog = false },
+                title = { Text("修改默认密码", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text(
+                            text = "当前默认密码：${PayConfig.getDefaultPassword(this@MainActivity)}",
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "悬浮窗密码框的提示与校验均使用该密码，修改后立即生效。",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                        )
+                        OutlinedTextField(
+                            value = pwdInput,
+                            onValueChange = { pwdInput = it },
+                            label = { Text("新默认密码") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        TextButton(onClick = { pwdInput = PayConfig.DEFAULT_PASSWORD }) {
+                            Text("恢复默认 123456", fontSize = 12.sp)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val newPwd = pwdInput.trim()
+                        if (newPwd.isEmpty()) {
+                            addLogMessage("默认密码不能为空，未保存")
+                            return@TextButton
+                        }
+                        PayConfig.setDefaultPassword(this@MainActivity, newPwd)
+                        addLogMessage("默认密码已更新，悬浮窗下次弹出时生效")
+                        showPwdDialog = false
+                    }) { Text("保存") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPwdDialog = false }) { Text("取消") }
+                }
+            )
+        }
 
         // 自动滚动到底部
         LaunchedEffect(logList.size) {
@@ -224,16 +293,26 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(end = 16.dp),
                             fontSize = 14.sp
                         )
+                        TextButton(onClick = {
+                            pwdInput = PayConfig.getDefaultPassword(this@MainActivity)
+                            showPwdDialog = true
+                        }) {
+                            Text(
+                                text = "SET KEY",
+                                fontSize = 13.sp,
+                                color = GeekNeon
+                            )
+                        }
                         TextButton(onClick = { clearLogMessages() }) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Clear Log",
-                                tint = Color.Black
+                                tint = GeekText
                             )
                             Text(
                                 text = "Clear Log",
                                 fontSize = 14.sp,
-                                color = Color.Black
+                                color = GeekText
                             )
                         }
                     }
@@ -244,7 +323,7 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier
                     .padding(innerPadding)
                     .fillMaxSize()
-                    .background(Color.White)
+                    .background(GeekPanel)
             ) {
                 if (logList.isEmpty()) {
                     Box(
@@ -273,13 +352,15 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = GeekSurface),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                             ) {
                                 Text(
                                     text = logItem,
                                     modifier = Modifier.padding(12.dp),
                                     fontSize = 14.sp,
-                                    lineHeight = 18.sp
+                                    lineHeight = 18.sp,
+                                    color = GeekText
                                 )
                             }
                         }

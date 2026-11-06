@@ -1,11 +1,14 @@
 package com.gs.payment.plugin.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import com.gs.payment.plugin.GeekPalette
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val GeekPanel = Color(GeekPalette.PANEL)
+val GeekSurface = Color(GeekPalette.SURFACE)
+val GeekField = Color(GeekPalette.FIELD)
+val GeekNeon = Color(GeekPalette.NEON)
+val GeekNeonDim = Color(GeekPalette.NEON_DIM)
+val GeekText = Color(GeekPalette.TEXT_PRIMARY)
+val GeekTextSecondary = Color(GeekPalette.TEXT_SECONDARY)
+val GeekDanger = Color(GeekPalette.DANGER)
+val GeekOnNeon = Color(GeekPalette.ON_NEON)

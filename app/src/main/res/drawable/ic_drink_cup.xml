@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 极客风饮料杯：单色线条，用于通知 smallIcon 与悬浮窗（可在代码中 tint） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 吸管 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13.4,1.4 L15.6,1.4 L14.4,6.6 L12.2,6.6 Z" />
+
+    <!-- 杯盖 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4.2,6.4 L19.8,6.4 L19.8,8.6 L4.2,8.6 Z" />
+
+    <!-- 杯身轮廓 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M6,9.2 L18,9.2 L16.5,21 L7.5,21 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineJoin="round" />
+
+    <!-- 液面 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M7.1,13.2 L16.9,13.2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.4" />
+
+    <!-- 气泡 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M10.2,16.4 A0.95,0.95 0 1,0 12.1,16.4 A0.95,0.95 0 1,0 10.2,16.4 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13.6,18.1 A0.7,0.7 0 1,0 15,18.1 A0.7,0.7 0 1,0 13.6,18.1 Z" />
+</vector>
