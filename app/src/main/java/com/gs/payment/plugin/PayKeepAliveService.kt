@@ -50,7 +50,7 @@ class PayKeepAliveService : Service() {
     private var windowManager: WindowManager? = null
     private var overlayView: View? = null
     private var countdownTimer: CountDownTimer? = null
-    private var countdownView: TextView? = null
+    private var countdownButton: Button? = null
 
     private val showReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -218,17 +218,6 @@ class PayKeepAliveService : Service() {
 
         card.addView(divider(dp, neonDim))
 
-        // 倒计时：每秒刷新，180 秒归零后自动关闭
-        val timerView = TextView(this).apply {
-            text = "> 倒计时 / TIMEOUT  ${COUNTDOWN_SECONDS}s"
-            typeface = mono
-            textSize = 10f
-            setTextColor(neon)
-            setPadding(0, 0, 0, dp(6))
-        }
-        countdownView = timerView
-        card.addView(timerView)
-
         card.addView(TextView(this).apply {
             text = "> 会话 / SESSION  ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())}"
             typeface = mono
@@ -320,7 +309,8 @@ class PayKeepAliveService : Service() {
             }
         }
         val cancelBtn = Button(this).apply {
-            text = "取消 / CANCEL"
+            // 倒计时置于取消按钮上，每秒刷新剩余秒数
+            text = "取消 / CANCEL  ${COUNTDOWN_SECONDS}s"
             typeface = mono
             textSize = 10f
             setAllCaps(false)
@@ -342,6 +332,7 @@ class PayKeepAliveService : Service() {
         }
         actions.addView(okBtn)
         actions.addView(cancelBtn)
+        countdownButton = cancelBtn
         card.addView(actions)
 
         card.addView(TextView(this).apply {
@@ -373,12 +364,12 @@ class PayKeepAliveService : Service() {
         countdownTimer = object : CountDownTimer(COUNTDOWN_MILLIS, 1_000L) {
             override fun onTick(millisUntilFinished: Long) {
                 val seconds = ((millisUntilFinished + 999L) / 1_000L).toInt()
-                countdownView?.setText("> 倒计时 / TIMEOUT  ${seconds}s")
+                countdownButton?.text = "取消 / CANCEL  ${seconds}s"
             }
 
             override fun onFinish() {
                 if (overlayView == null) return
-                countdownView?.setText("> 倒计时 / TIMEOUT  0s")
+                countdownButton?.text = "取消 / CANCEL  0s"
                 debugLog("> TIMEOUT  ORDER_ID=$orderId")
                 sendResult(false, "timeout", orderMoney, "", orderId)
                 removeOverlay()
@@ -389,7 +380,7 @@ class PayKeepAliveService : Service() {
     private fun removeOverlay() {
         countdownTimer?.cancel()
         countdownTimer = null
-        countdownView = null
+        countdownButton = null
         overlayView?.let {
             try {
                 windowManager?.removeView(it)
