@@ -17,7 +17,7 @@ class FeedbackPayReceiver : BaseBroadReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         Logger.i(TAG, "Received intent action: ${intent.action}")
-        log( "Received intent action: ${intent.action}")
+        log("Received intent action: ${intent.action}")
         if (intent.action != ACTION) return
 
         val orderId = intent.getStringExtra("ORDER_ID")
@@ -27,20 +27,12 @@ class FeedbackPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "MAKE_STATE_ACTION received. ORDER_MONEY=${orderMoney}")
         Logger.i(TAG, "MAKE_STATE_ACTION received. STATE=${state}")
 
-        if (state == "success"){
+        if (state == "success") {
             //订单完成
-            CommandUtils.orderComplete(orderId.toString(), object : PaymentOrderCallback {
-                override fun onSuccess(code: Int, data: String) {
-                    Logger.i(TAG, "订单完成: $data")
-                }
-
-                override fun onFailure(errorMessage: String) {
-                    Logger.i(TAG, "订单失败: $errorMessage")
-                }
-            })
-        }else{
+            Logger.i(TAG, "订单完成: ${orderId}")
+        } else {
             // 发起退款订单
-            CommandUtils.refundOrder(orderId.toString(), orderMoney.toString(), state.toString(), object :
+            CommandUtils.refundOrder(object :
                 PaymentOrderCallback {
                 override fun onSuccess(code: Int, data: String) {
                     Logger.i(TAG, "退款订单成功: $data")

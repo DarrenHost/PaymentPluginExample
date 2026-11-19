@@ -13,8 +13,6 @@ import androidx.core.app.NotificationCompat
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.gs.payment.plugin.R
-import com.gs.payment.plugin.http.Api
-import com.gs.payment.plugin.utils.SerialPortConfig
 import com.gs.payment.plugin.work.RestartWatchWorker
 import java.util.concurrent.TimeUnit
 
@@ -28,6 +26,7 @@ class PaymentService : Service() {
     companion object {
         private const val CHANNEL_ID = "payment_service_channel"
         private const val NOTIFICATION_ID = 1001
+        private const val TAG = "PaymentService"
 
         fun start(context: Context) {
             val intent = Intent(context, PaymentService::class.java)
@@ -52,10 +51,7 @@ class PaymentService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 从配置读取socket IP和端口号
-        val socketIp = SerialPortConfig.getSocketIp(this)
-        Api.url = socketIp
-        return START_STICKY
+        return super.onStartCommand(intent, flags, startId)
     }
 
     private fun buildNotification(): Notification {

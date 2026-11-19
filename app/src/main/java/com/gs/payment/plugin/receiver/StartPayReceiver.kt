@@ -2,25 +2,24 @@ package com.gs.payment.plugin.receiver
 
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
-import android.os.Message
+import android.hardware.usb.UsbManager
+import com.blankj.utilcode.util.ThreadUtils
 import com.google.gson.Gson
-import com.gs.payment.plugin.bean.OrderBean
+import com.gs.payment.plugin.bean.IcDeviceInfoBean
+import com.gs.payment.plugin.bean.IcOrderBean
 import com.gs.payment.plugin.manager.Constants
 import com.gs.payment.plugin.manager.PaymentOrderCallback
 import com.gs.payment.plugin.utils.Logger
 import com.gs.payment.plugin.manager.CommandUtils
-import java.lang.ref.WeakReference
+import com.gs.payment.plugin.manager.ByteUtils
+import com.hc.reader.AndroidUSB
+import com.hc.reader.Card
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 class StartPayReceiver : BaseBroadReceiver() {
 
     private var context: Context? = null
-    private var handler: Handler? = null
-    private var orderId: String? = null
-    private var amount: Int = 0
-    private var pollingRunnable: Runnable? = null
-    private var maxPollingCount: Int = Constants.MAX_POLLING_COUNT // 最多轮询次数
 
     companion object {
         private const val TAG = "PaymentPlugin.StartPayReceiver"
@@ -28,21 +27,23 @@ class StartPayReceiver : BaseBroadReceiver() {
         const val ACTION = "com.coffeeji.payment.plugin.PAY_ACTION"
 
         const val RESULT_ACTION = "com.coffeeji.payment.plugin.PAY_STATE_ACTION"
-    }
 
-    // 静态Handler内部类，使用WeakReference避免内存泄漏
-    private class StaticHandler(private val weakReference: WeakReference<StartPayReceiver>) : Handler(Looper.getMainLooper()) {
-        override fun handleMessage(msg: Message) {
-            super.handleMessage(msg)
-            val receiver = weakReference.get() ?: return
-            // 处理消息
+        // 当前定时读卡任务
+        @Volatile
+        private var readCardTask: ThreadUtils.Task<String>? = null
+
+        /**
+         * 供 CancelPayReceiver 调用：停止定时读卡任务
+         */
+        fun stopReadCardTask() {
+            readCardTask?.let { ThreadUtils.cancel(it) }
+            readCardTask = null
         }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         this.context = context
-        this.handler = StaticHandler(WeakReference(this))
         Logger.i(TAG, "Received intent action: ${intent.action}")
         if (intent.action != ACTION) return
 
@@ -63,49 +64,123 @@ class StartPayReceiver : BaseBroadReceiver() {
             sendResult(context, false, "invalid orderId", "")
             return
         }
-        
-        // 验证并转换金额
-        val amount = validateAndConvertAmount(orderMoney) ?: run {
-            sendResult(context, false, "invalid orderMoney", "")
-            return
+
+        // 步骤1：启动定时读卡任务，每秒读取一次 IC 卡
+        startReadCardTask(context, orderMoney.toString())
+    }
+
+    /**
+     * 启动定时读卡任务：每秒读取一次 IC 卡，读到卡后停止任务并继续支付流程
+     */
+    private fun startReadCardTask(context: Context, orderMoney: String) {
+        stopReadCardTask()
+        val task = object : ThreadUtils.SimpleTask<String>() {
+            override fun doInBackground(): String {
+                return readIcCardCode(context)
+            }
+
+            override fun onSuccess(result: String) {
+                if (result.isBlank()) return // 未读到卡，等待下一次定时读取
+                // 读到卡后停止定时任务，避免重复读取
+                readCardTask?.let { ThreadUtils.cancel(it) }
+                readCardTask = null
+                Logger.i(TAG, "读取到IC卡号: $result")
+                // 流程：获取设备配置 → 堂食下单
+                queryDeviceConfig(context, orderMoney, result)
+            }
+
+            override fun onFail(t: Throwable) {
+                Logger.i(TAG, "定时读卡异常"+t.message)
+            }
         }
+        ThreadUtils.executeBySingleAtFixRate(task, 1, TimeUnit.SECONDS)
+        readCardTask = task
+    }
 
-        // 保存订单信息用于轮询
-        this.orderId = orderId
-        this.amount = amount
-
-        // 构建并发送支付指令,得到支付结果
+    /**
+     * 获取设备配置：使用 IcDeviceInfoBean 解析响应
+     */
+    private fun queryDeviceConfig(context: Context, orderMoney: String, cardCode: String) {
         try {
-            CommandUtils.sendPaymentOrder(orderId, amount, productId, productName, attach, object :
-                PaymentOrderCallback {
+            CommandUtils.deviceInfoQuery(cardCode, object : PaymentOrderCallback {
                 override fun onSuccess(statusCode: Int, responseBody: String) {
                     try {
-                        Logger.i(TAG, "支付订单提交成功，响应: $responseBody")
-                        val orderBean = Gson().fromJson(responseBody, OrderBean::class.java)
-                        if (orderBean.code != 200) {
-                            sendResult(context, false, "支付失败", amount.toString())
-                        } else {
-                            if (orderBean.data != null) {
-                                Constants.THIRD_ORDER_NO = orderBean.data.thirdOrderNo
-                            }
-                            // 支付订单提交成功，开始轮询查询支付结果
-                            startPollingPaymentResult()
-                        }
+                        Logger.i(TAG, "获取设备配置成功: $responseBody")
+                        val deviceInfo = Gson().fromJson(responseBody, IcDeviceInfoBean::class.java)
+                        Logger.i(
+                            TAG,
+                            "设备配置解析: deviceId=${deviceInfo.deviceId}, " +
+                                "enableFast=${deviceInfo.isEnableFast}, enableFixed=${deviceInfo.isEnableFixed}"
+                        )
+                        // 设备配置解析完成，进行堂食下单
+                        submitDineInOrder(context, orderMoney, cardCode)
                     } catch (e: Exception) {
-                        Logger.e(TAG, "解析支付订单响应异常", e)
-                        sendResult(context, false, "解析响应异常: ${e.message}", amount.toString())
+                        Logger.e(TAG, "处理设备配置响应异常", e)
+                        sendResult(context, false, "处理设备配置异常: ${e.message}", orderMoney)
                     }
                 }
 
                 override fun onFailure(errorMessage: String) {
-                    Logger.i(TAG, "支付订单提交失败: $errorMessage")
-                    sendResult(context, false, errorMessage, amount.toString())
+                    Logger.w(TAG, "获取设备配置失败: $errorMessage")
+                    sendResult(context, false, "获取设备配置失败: $errorMessage", orderMoney)
                 }
             })
         } catch (e: Exception) {
-            Logger.e(TAG, "发送支付指令异常", e)
-            log("发送支付指令异常: ${e.message}")
-            sendResult(context, false, "发送指令异常: ${e.message}", "")
+            Logger.e(TAG, "获取设备配置异常", e)
+            sendResult(context, false, "获取设备配置异常: ${e.message}", orderMoney)
+        }
+    }
+
+    /**
+     * 堂食下单：设备配置获取成功后调用
+     */
+    private fun submitDineInOrder(
+        context: Context,
+        amount: String,
+        cardCode: String
+    ) {
+        try {
+            CommandUtils.sendPaymentOrder(amount, cardCode, object :
+                PaymentOrderCallback {
+                override fun onSuccess(statusCode: Int, responseBody: String) {
+                    try {
+                        Logger.i(TAG, "堂食下单成功，响应: $responseBody")
+                        val jsonObj = JSONObject(responseBody)
+                        if (jsonObj.optInt("code", -1) != 200) {
+                            sendResult(context, false, "下单失败: ${jsonObj.optString("msg")}", amount)
+                            return
+                        }
+                        // 解析 IcOrderBean（响应 data 字段）
+                        val dataObj = jsonObj.optJSONObject("data")
+                        val orderBean = if (dataObj != null) {
+                            Gson().fromJson(dataObj.toString(), IcOrderBean::class.java)
+                        } else {
+                            Gson().fromJson(responseBody, IcOrderBean::class.java)
+                        }
+                        val details = orderBean.detailsItem
+                        if (details.isNullOrEmpty()) {
+                            sendResult(context, false, "下单失败: 无订单明细", amount)
+                            return
+                        }
+                        // 取首个订单明细的订单号保存，供退款使用
+                        Constants.icCardOrderNo = details[0].orderNo.orEmpty()
+                        Logger.i(TAG, "堂食下单订单号: ${Constants.icCardOrderNo}")
+                        sendResult(context, true, "支付成功", amount)
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "解析下单响应异常", e)
+                        sendResult(context, false, "解析下单响应异常: ${e.message}", amount)
+                    }
+                }
+
+                override fun onFailure(errorMessage: String) {
+                    Logger.i(TAG, "堂食下单失败: $errorMessage")
+                    sendResult(context, false, errorMessage, amount)
+                }
+            })
+        } catch (e: Exception) {
+            Logger.e(TAG, "发送堂食下单指令异常", e)
+            log("发送堂食下单指令异常: ${e.message}")
+            sendResult(context, false, "发送下单指令异常: ${e.message}", "")
         }
     }
 
@@ -127,93 +202,40 @@ class StartPayReceiver : BaseBroadReceiver() {
         )
         log("Sending PAY_STATE_ACTION: status=${if (success) "success" else "fail"}, message=$message, money=$money")
         context.sendBroadcast(out)
-
-        // 停止轮询
-        stopPolling()
     }
 
-    // 开始轮询查询支付结果
-    private fun startPollingPaymentResult() {
-        val orderId = this.orderId ?: return
-        val handler = this.handler ?: return
-        var pollingCount = 0
+    /**
+     * 读取 IC 卡号作为 cardCode，供设备配置和下单使用。
+     * 读取失败返回空串。
+     */
+    private fun readIcCardCode(ctx: Context?): String {
+        val safeContext = ctx ?: return ""
+        return try {
+            val usbManager = safeContext.getSystemService(Context.USB_SERVICE) as? UsbManager
+                ?: return ""
+            val card: Card = AndroidUSB(safeContext, usbManager)
+            val usbDevice = card.GetUsbReader() ?: return ""
 
-        // 创建轮询任务
-        pollingRunnable = object : Runnable {
-            override fun run() {
-                if (pollingCount >= maxPollingCount) {
-                    // 超过最大轮询次数，认为支付失败
-                    sendResult(context, false, "支付超时", amount.toString())
-                    return
-                }
-
-                pollingCount++
-                Logger.i(TAG, "轮询查询支付结果，第 $pollingCount 次")
-
-                // 查询订单状态
-                CommandUtils.queryOrder(orderId, object : PaymentOrderCallback {
-                    override fun onSuccess(statusCode: Int, responseBody: String) {
-                        try {
-                            Logger.i(TAG, "查询订单状态响应: $responseBody")
-                            val orderBean = Gson().fromJson(responseBody, OrderBean::class.java)
-
-                            if (orderBean.code == 200 && orderBean.data != null) {
-                                val orderStatus = orderBean.data.orderStatus
-                                Logger.i(TAG, "订单状态: $orderStatus")
-
-                                //2 支付成功,其他状态继续轮询
-                                when (orderStatus) {
-                                    2 -> {
-                                        // 支付成功
-                                        sendResult(context, true, "支付成功", amount.toString())
-                                    }
-                                    else -> {
-                                        // 未知状态，继续轮询
-                                        Logger.w(TAG, "订单状态: $orderStatus，继续轮询")
-                                        handler.postDelayed(pollingRunnable!!, Constants.POLLING_INTERVAL)
-                                    }
-                                }
-                            } else {
-                                Logger.w(TAG, "查询订单状态返回异常: ${orderBean.msg}，继续轮询")
-                                handler.postDelayed(pollingRunnable!!, Constants.POLLING_INTERVAL)
-                            }
-                        } catch (e: Exception) {
-                            Logger.e(TAG, "解析订单状态响应异常", e)
-                            handler.postDelayed(pollingRunnable!!, Constants.POLLING_INTERVAL)
-                        }
-                    }
-
-                    override fun onFailure(errorMessage: String) {
-                        Logger.w(TAG, "查询订单状态失败: $errorMessage，继续轮询")
-                        handler.postDelayed(pollingRunnable!!, Constants.POLLING_INTERVAL)
-                    }
-                })
+            if (card.OpenReader(usbDevice) < 0) {
+                Logger.w(TAG, "打开 IC 卡读卡器失败")
+                return ""
             }
-        }
 
-        // 开始第一次轮询
-        handler.post(pollingRunnable!!)
-    }
+            val data = ByteArray(16)
+            val readResult = card.rf_scard("4".toByte(), data)
+            if (readResult < 0) {
+                Logger.w(TAG, "读取 IC 卡数据失败")
+                return ""
+            }
 
-    // 停止轮询
-    private fun stopPolling() {
-        handler?.removeCallbacks(pollingRunnable ?: return)
-        Logger.i(TAG, "停止轮询")
-    }
-
-    // 验证并转换金额为分
-    private fun validateAndConvertAmount(orderMoney: String?): Int? {
-        if (orderMoney.isNullOrBlank()) return null
-        
-        val money = try {
-            orderMoney.toDoubleOrNull() ?: 0.0
+            val bytes: ByteArray = ByteUtils.subBytes(data, 0, readResult.toInt())
+            ByteUtils.reverse(bytes)
+            val result = ByteUtils.bytesToHex(bytes).uppercase()
+            Logger.i(TAG, "读取IC卡数据: $result")
+            result
         } catch (e: Exception) {
-            return null
+            Logger.e(TAG, "读取IC卡异常", e)
+            ""
         }
-        
-        if (money <= 0) return null
-        
-        // 转换金额为分（整数）
-        return (money * 100).toInt()
     }
 }

@@ -7,22 +7,16 @@ package com.gs.payment.plugin.http
  */
 object Api {
 
-    //正式环境 https://services.saltovending.igniterz.dev
-    var url: String = "https://services.apisconnector.posvending.lat"
+    //IC卡服务器地址
+    const val IC_SERVER_URL: String = "https://testxcxst.keyijievip.com"
 
-    //创建订单信息
-    var selectUrl: String = "$url/order/rcard"
+    //堂食下单
+    const val orderAddUrl: String = "$IC_SERVER_URL/api/api/open/order/add"
 
-    //查询订单
-    var orderStatusUrl: String = "$url/order/status"
+    //堂食退单
+    var refundOrderUrl: String = "$IC_SERVER_URL/api/api/open/order/refund"
 
-    //退款
-    var refundUrl: String = "$url/order/refund"
-
-    //订单完成
-    var completeUrl: String = "$url/order/complete"
-
-    //取消支付
-    var cancelUrl: String = "$url/order/cancel"
+    ///设备配置
+    var deviceSettingUrl: String = "$IC_SERVER_URL/api/api/open/device/setting"
 
 }

@@ -25,15 +25,12 @@ class CancelPayReceiver : BaseBroadReceiver() {
         Logger.i(TAG, "PAY_CANCEL_ACTON received. ORDER_MONEY=${orderMoney}")
 
         try {
-            CommandUtils.cancelOrder(orderId.toString(), object : PaymentOrderCallback {
-                override fun onSuccess(code: Int, data: String) {
-                    Logger.i(TAG, "取消订单成功: $data")
-                }
-
-                override fun onFailure(errorMessage: String) {
-                    Logger.i(TAG, "取消订单失败: $errorMessage")
-                }
-            })
+            // 停止 StartPayReceiver 的定时读卡任务
+            StartPayReceiver.stopReadCardTask()
+            //发送取消广播
+            val intent =
+                Intent(ACTION).putExtra("ORDER_ID", orderId).putExtra("ORDER_MONEY", orderMoney)
+            context.sendBroadcast(intent)
             Logger.i(TAG, "取消支付指令已发送")
         } catch (e: Exception) {
             Logger.e(TAG, "取消发送支付指令异常: ${e.message}")

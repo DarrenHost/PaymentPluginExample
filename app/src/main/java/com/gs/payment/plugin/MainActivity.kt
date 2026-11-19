@@ -22,26 +22,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -56,7 +51,6 @@ import androidx.work.WorkManager
 import androidx.work.await
 import com.gs.payment.plugin.service.PaymentService
 import com.gs.payment.plugin.utils.Logger
-import com.gs.payment.plugin.utils.SerialPortConfig
 import com.gs.payment.plugin.work.MonitoringWorker
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -244,50 +238,11 @@ class MainActivity : ComponentActivity() {
     fun ScrollableLogApp(logList: List<String>) {
         val context = this@MainActivity
         val lazyListState = rememberLazyListState()
-        val coroutineScope = rememberCoroutineScope()
-        
-        // socket状态
-        val currentDevicePath = remember {
-            mutableStateOf(SerialPortConfig.getSocketIp(context))
-        }
-        
-        // 对话框显示状态
-        val showDialog = remember { mutableStateOf(false) }
 
         // 自动滚动到底部
         LaunchedEffect(logList.size) {
             if (logList.isNotEmpty()) {
                 lazyListState.animateScrollToItem(logList.size - 1)
-            }
-        }
-        
-        // 处理socket配置确认
-        fun onConfirmSerialPortSelection() {
-            if (currentDevicePath.value.isNotEmpty()) {
-                try {
-                    
-                    // 保存配置
-                    SerialPortConfig.saveSocketIp(context, currentDevicePath.value)
-                    // 关闭对话框
-                    showDialog.value = false
-
-                    // 重启服务
-                    coroutineScope.launch {
-                        try {
-                            // 停止服务
-                            PaymentService.stop(context)
-                            // 等待服务停止
-                            kotlinx.coroutines.delay(500)
-                            // 启动服务
-                            PaymentService.start(context)
-                            Logger.i(TAG, "socket已更新为: ${currentDevicePath.value}:，服务已重启")
-                        } catch (e: Exception) {
-                            Logger.e(TAG, "重启服务失败", e)
-                        }
-                    }
-                } catch (e: NumberFormatException) {
-                    Logger.e(TAG, "错误: ${e.message}")
-                }
             }
         }
 
@@ -301,25 +256,6 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     actions = {
-                        // Socket配置显示和编辑
-                        Row(
-                            modifier = Modifier.padding(end = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = currentDevicePath.value,
-                                modifier = Modifier.padding(end = 4.dp),
-                                fontSize = 14.sp,
-                                color = Color.Black
-                            )
-                            IconButton(onClick = { showDialog.value = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit Socket",
-                                    tint = Color.Black
-                                )
-                            }
-                        }
                         Text(
                             text = "Count: ${logList.size}",
                             modifier = Modifier.padding(end = 16.dp),
@@ -426,44 +362,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        }
-        
-        // socket输入对话框
-        if (showDialog.value) {
-            AlertDialog(
-                onDismissRequest = { showDialog.value = false },
-                title = {
-                    Text(
-                        text = "输入http路径",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                text = {
-                    Column {
-                        // IP地址输入框
-                        TextField(
-                            value = currentDevicePath.value,
-                            onValueChange = { currentDevicePath.value = it },
-                            label = { Text("IP地址") },
-                            singleLine = true,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { onConfirmSerialPortSelection() },
-                        enabled = currentDevicePath.value.isNotEmpty()
-                    ) {
-                        Text("确认")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDialog.value = false }) {
-                        Text("取消")
-                    }
-                }
-            )
         }
     }
 }
