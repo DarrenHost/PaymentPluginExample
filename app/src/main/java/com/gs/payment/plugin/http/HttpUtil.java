@@ -15,6 +15,10 @@ import okhttp3.RequestBody;
 
 public class HttpUtil {
 
+    public static OkHttpClient getClientInstance() {
+        return OkHttpClientSingle.getClientInstance();
+    }
+
     //异步get 拼接字符串
     public static void asyncGet(String url, String data, Callback callback) {
         OkHttpClient client = OkHttpClientSingle.getClientInstance();
