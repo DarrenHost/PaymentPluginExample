@@ -51,6 +51,7 @@ import androidx.work.WorkManager
 import androidx.work.await
 import com.gs.payment.plugin.service.PaymentService
 import com.gs.payment.plugin.utils.Logger
+import com.gs.payment.plugin.utils.UsbPermissionHelper
 import com.gs.payment.plugin.work.MonitoringWorker
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -92,6 +93,10 @@ class MainActivity : ComponentActivity() {
         val filter = IntentFilter(LOG_ACTION)
         registerReceiver(receiver, filter)
         
+        // 前台验证 USB 读卡器权限（授权弹窗在前台弹出，更可靠）
+        // post 延迟到视图组合完成后执行，确保 addLogMessage 能更新 UI
+        window.decorView.post { verifyUsbPermission() }
+
         // 启动PaymentService（如果未启动）
         startPaymentServiceIfNeeded()
         
@@ -113,6 +118,14 @@ class MainActivity : ComponentActivity() {
 
     fun clearLogMessages() {
         logState?.clear()
+    }
+
+    /**
+     * 前台验证 USB 读卡器权限：已授权直接用，未授权则弹出授权对话框
+     */
+    private fun verifyUsbPermission() {
+        val result = UsbPermissionHelper.verifyReaderPermission(this)
+        addLogMessage(result.message)
     }
 
     /**

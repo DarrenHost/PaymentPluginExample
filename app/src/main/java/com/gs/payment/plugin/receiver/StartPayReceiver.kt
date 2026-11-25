@@ -10,6 +10,7 @@ import com.gs.payment.plugin.bean.IcOrderBean
 import com.gs.payment.plugin.manager.Constants
 import com.gs.payment.plugin.manager.PaymentOrderCallback
 import com.gs.payment.plugin.utils.Logger
+import com.gs.payment.plugin.utils.UsbPermissionHelper
 import com.gs.payment.plugin.manager.CommandUtils
 import com.gs.payment.plugin.manager.ByteUtils
 import com.hc.reader.AndroidUSB
@@ -74,13 +75,18 @@ class StartPayReceiver : BaseBroadReceiver() {
      */
     private fun startReadCardTask(context: Context, orderMoney: String) {
         stopReadCardTask()
+        Logger.i(TAG, "启动定时读卡任务，每秒读取一次IC卡")
         val task = object : ThreadUtils.SimpleTask<String>() {
             override fun doInBackground(): String {
                 return readIcCardCode(context)
             }
 
             override fun onSuccess(result: String) {
-                if (result.isBlank()) return // 未读到卡，等待下一次定时读取
+                if (result.isBlank()) {
+                    // 未读到卡，等待下一次定时读取（每秒一次，避免刷屏可按需注释）
+                    Logger.i(TAG, "本次未读到IC卡，继续等待")
+                    return
+                }
                 // 读到卡后停止定时任务，避免重复读取
                 readCardTask?.let { ThreadUtils.cancel(it) }
                 readCardTask = null
@@ -90,7 +96,7 @@ class StartPayReceiver : BaseBroadReceiver() {
             }
 
             override fun onFail(t: Throwable) {
-                Logger.i(TAG, "定时读卡异常"+t.message)
+                Logger.e(TAG, "定时读卡异常", t)
             }
         }
         ThreadUtils.executeBySingleAtFixRate(task, 1, TimeUnit.SECONDS)
@@ -212,9 +218,22 @@ class StartPayReceiver : BaseBroadReceiver() {
         val safeContext = ctx ?: return ""
         return try {
             val usbManager = safeContext.getSystemService(Context.USB_SERVICE) as? UsbManager
-                ?: return ""
+                ?: run {
+                    Logger.w(TAG, "获取 UsbManager 失败")
+                    return ""
+                }
             val card: Card = AndroidUSB(safeContext, usbManager)
-            val usbDevice = card.GetUsbReader() ?: return ""
+            // 复用 UsbPermissionHelper 的设备查找（库匹配失败时会回退遍历系统设备列表并打印 VID/PID）
+            val usbDevice = UsbPermissionHelper.findReaderDevice(safeContext, usbManager) ?: run {
+                Logger.w(TAG, "未找到USB读卡器（系统USB设备列表为空，请检查设备是否插入）")
+                return ""
+            }
+
+            // 权限由前台 MainActivity 申请；此处仅检查，避免在后台重复弹框
+            if (!UsbPermissionHelper.hasPermission(usbManager, usbDevice)) {
+                Logger.w(TAG, "USB读卡器未授权，请在MainActivity中先授予USB权限")
+                return ""
+            }
 
             if (card.OpenReader(usbDevice) < 0) {
                 Logger.w(TAG, "打开 IC 卡读卡器失败")
@@ -234,8 +253,8 @@ class StartPayReceiver : BaseBroadReceiver() {
             Logger.i(TAG, "读取IC卡数据: $result")
             result
         } catch (e: Exception) {
-            Logger.e(TAG, "读取IC卡异常", e)
-            ""
+            Logger.e(TAG, "读取IC卡异常（抛出至onFail）", e)
+            throw e // 冒泡到 ThreadUtils.SimpleTask.onFail
         }
     }
 }
