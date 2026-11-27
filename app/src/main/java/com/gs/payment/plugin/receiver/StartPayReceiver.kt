@@ -7,12 +7,11 @@ import com.blankj.utilcode.util.ThreadUtils
 import com.google.gson.Gson
 import com.gs.payment.plugin.bean.IcDeviceInfoBean
 import com.gs.payment.plugin.bean.IcOrderBean
+import com.gs.payment.plugin.manager.ByteUtils
+import com.gs.payment.plugin.manager.CommandUtils
 import com.gs.payment.plugin.manager.Constants
 import com.gs.payment.plugin.manager.PaymentOrderCallback
 import com.gs.payment.plugin.utils.Logger
-import com.gs.payment.plugin.utils.UsbPermissionHelper
-import com.gs.payment.plugin.manager.CommandUtils
-import com.gs.payment.plugin.manager.ByteUtils
 import com.hc.reader.AndroidUSB
 import com.hc.reader.Card
 import org.json.JSONObject
@@ -76,9 +75,23 @@ class StartPayReceiver : BaseBroadReceiver() {
     private fun startReadCardTask(context: Context, orderMoney: String) {
         stopReadCardTask()
         Logger.i(TAG, "启动定时读卡任务，每秒读取一次IC卡")
+        val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
+        val card: Card = AndroidUSB(context, usbManager)
+        val usbDevice = card.GetUsbReader()
+        if (usbDevice == null) {
+            Logger.w(TAG, "未找到USB读卡器（库匹配失败）")
+            return
+        }
+        val openResult = card.OpenReader(usbDevice)
+        if (openResult < 0) {
+            Logger.w(TAG, "读取 IC 卡数据失败, 返回值=$openResult")
+            return
+        }
         val task = object : ThreadUtils.SimpleTask<String>() {
             override fun doInBackground(): String {
-                return readIcCardCode(context)
+                val data = ByteArray(16)
+                val readResult = card.rf_scard("4".toByte(), data)
+                return readIcCardCode(readResult, data)
             }
 
             override fun onSuccess(result: String) {
@@ -112,11 +125,13 @@ class StartPayReceiver : BaseBroadReceiver() {
                 override fun onSuccess(statusCode: Int, responseBody: String) {
                     try {
                         Logger.i(TAG, "获取设备配置成功: $responseBody")
-                        val deviceInfo = Gson().fromJson(responseBody, IcDeviceInfoBean::class.java)
+                        val rootObj = JSONObject(responseBody)
+                        val configBody = rootObj.optJSONObject("data")?.toString() ?: responseBody
+                        val deviceInfo = Gson().fromJson(configBody, IcDeviceInfoBean::class.java)
                         Logger.i(
                             TAG,
                             "设备配置解析: deviceId=${deviceInfo.deviceId}, " +
-                                "enableFast=${deviceInfo.isEnableFast}, enableFixed=${deviceInfo.isEnableFixed}"
+                                    "enableFast=${deviceInfo.isEnableFast}, enableFixed=${deviceInfo.isEnableFixed}"
                         )
                         // 设备配置解析完成，进行堂食下单
                         submitDineInOrder(context, orderMoney, cardCode)
@@ -152,8 +167,18 @@ class StartPayReceiver : BaseBroadReceiver() {
                     try {
                         Logger.i(TAG, "堂食下单成功，响应: $responseBody")
                         val jsonObj = JSONObject(responseBody)
-                        if (jsonObj.optInt("code", -1) != 200) {
-                            sendResult(context, false, "下单失败: ${jsonObj.optString("msg")}", amount)
+                        // 服务端返回 status/message，旧接口可能返回 code/msg，这里都兼容
+                        val businessCode = when {
+                            jsonObj.has("status") -> jsonObj.optInt("status", -1)
+                            jsonObj.has("code") -> jsonObj.optInt("code", -1)
+                            else -> -1
+                        }
+                        if (businessCode != 200) {
+                            val errorMessage = jsonObj.optString("message")
+                                .takeIf { it.isNotBlank() && it != "null" }
+                                ?: jsonObj.optString("msg").takeIf { it.isNotBlank() && it != "null" }
+                                ?: "未知错误"
+                            sendResult(context, false, "下单失败: $errorMessage", amount)
                             return
                         }
                         // 解析 IcOrderBean（响应 data 字段）
@@ -214,39 +239,16 @@ class StartPayReceiver : BaseBroadReceiver() {
      * 读取 IC 卡号作为 cardCode，供设备配置和下单使用。
      * 读取失败返回空串。
      */
-    private fun readIcCardCode(ctx: Context?): String {
-        val safeContext = ctx ?: return ""
+    private fun readIcCardCode(readResult: Short, data: ByteArray): String {
+        if (readResult < 0) {
+            Logger.w(TAG, "读取IC卡失败，读卡库返回错误码=$readResult")
+            return ""
+        }
+        if (readResult.toInt() > data.size) {
+            Logger.w(TAG, "读卡库返回长度异常: readResult=$readResult, data.size=${data.size}")
+            return ""
+        }
         return try {
-            val usbManager = safeContext.getSystemService(Context.USB_SERVICE) as? UsbManager
-                ?: run {
-                    Logger.w(TAG, "获取 UsbManager 失败")
-                    return ""
-                }
-            val card: Card = AndroidUSB(safeContext, usbManager)
-            // 复用 UsbPermissionHelper 的设备查找（库匹配失败时会回退遍历系统设备列表并打印 VID/PID）
-            val usbDevice = UsbPermissionHelper.findReaderDevice(safeContext, usbManager) ?: run {
-                Logger.w(TAG, "未找到USB读卡器（系统USB设备列表为空，请检查设备是否插入）")
-                return ""
-            }
-
-            // 权限由前台 MainActivity 申请；此处仅检查，避免在后台重复弹框
-            if (!UsbPermissionHelper.hasPermission(usbManager, usbDevice)) {
-                Logger.w(TAG, "USB读卡器未授权，请在MainActivity中先授予USB权限")
-                return ""
-            }
-
-            if (card.OpenReader(usbDevice) < 0) {
-                Logger.w(TAG, "打开 IC 卡读卡器失败")
-                return ""
-            }
-
-            val data = ByteArray(16)
-            val readResult = card.rf_scard("4".toByte(), data)
-            if (readResult < 0) {
-                Logger.w(TAG, "读取 IC 卡数据失败")
-                return ""
-            }
-
             val bytes: ByteArray = ByteUtils.subBytes(data, 0, readResult.toInt())
             ByteUtils.reverse(bytes)
             val result = ByteUtils.bytesToHex(bytes).uppercase()

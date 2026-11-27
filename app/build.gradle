@@ -56,6 +56,12 @@ android {
     buildFeatures {
         compose true
     }
+    // hcreader 的 .so 库放在 app/libs/<abi>/ 下，需显式指定为 jniLibs 目录
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['libs']
+        }
+    }
     composeOptions {
         kotlinCompilerExtensionVersion '1.5.1'
     }
@@ -80,7 +86,7 @@ dependencies {
     implementation libs.work.ktx
     implementation libs.xlog
     implementation libs.utilcodex
-    implementation files('libs\\lib-board-release.jar')
+    implementation files('libs\\reecamlib.jar')
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core

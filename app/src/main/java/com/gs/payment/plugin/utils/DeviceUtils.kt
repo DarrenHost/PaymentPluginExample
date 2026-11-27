@@ -1,10 +1,7 @@
 package com.gs.payment.plugin.utils
 
 import android.annotation.SuppressLint
-import android.app.Activity
-import com.elvishew.xlog.XLog
-import com.gs.lib.board.VendorFactory
-import java.io.File
+import android.app.reecam.ReecamManager
 
 
 /**
@@ -14,17 +11,18 @@ import java.io.File
  */
 object DeviceUtils {
 
+    @Volatile
+    private var cachedUniqueCode: String? = null
+
     fun uniqueCode(): String {
-        return VendorFactory.getInstance().uniqueCode()
+
+
+        //移远
+        @SuppressLint("WrongConstant") val mManager =
+            com.gs.payment.plugin.PaymentApplication.appContext.getSystemService("reecam") as ReecamManager
+        return mManager.serial.replace("\\s*".toRegex(), "")
     }
 
-    fun setNavigationBar(activity: Activity, isShow: Boolean) {
-        VendorFactory.getInstance().setNavBarState(isShow)
-    }
-
-    fun reboot() {
-        VendorFactory.getInstance().reboot()
-    }
 
     /**
      * 获取4g模块版本
@@ -35,26 +33,6 @@ object DeviceUtils {
         return "未知"
     }
 
-    /**
-     * 获取Imei
-     * @return String
-     */
-    @SuppressLint("HardwareIds")
-    fun getImei(): String {
-        try {
-            return VendorFactory.getInstance().imei
-        } catch (e:Exception) {
-            XLog.i("获取设备IMEI错误：${e.message}")
-            return "未知"
-        }
-    }
-
-    /**
-     * 安装app
-     */
-    fun installApp(file: File) {
-        VendorFactory.getInstance().installApk(file)
-    }
 
 }
 

@@ -28,18 +28,68 @@ object UsbPermissionHelper {
     @Volatile
     private var requestingPermission = false
 
+    // 等待中的最终授权结果回调；授权弹窗是异步的，不能用返回值直接拿到结果
+    @Volatile
+    private var permissionCallback: ((PermissionResult) -> Unit)? = null
+
+    @Volatile
+    private var waitingDeviceKey: String? = null
+
+    private fun UsbDevice.key(): String = "$vendorId:$productId:$deviceName"
+
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (ACTION_USB_PERMISSION != intent.action) return
             requestingPermission = false
-            val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-            val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-            if (granted) {
-                Logger.i(TAG, "USB设备授权成功: ${device?.deviceName}")
-            } else {
-                Logger.w(TAG, "USB设备授权被拒绝: ${device?.deviceName}")
+
+            val expectedKey = waitingDeviceKey
+            waitingDeviceKey = null
+
+            val systemGranted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+            val deviceFromExtra = getDeviceFromIntent(intent)
+            val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
+            // 某些 ROM 的授权回调不带 EXTRA_DEVICE，按请求时记录的设备标识回退查找
+            val device = deviceFromExtra
+                ?: usbManager?.deviceList?.values?.firstOrNull { it.key() == expectedKey }
+
+            val deviceInfo = device?.let {
+                "${it.deviceName} (VID=${it.vendorId}, PID=${it.productId})"
+            } ?: "等待设备=$expectedKey，广播设备=null"
+
+            if (expectedKey != null && device != null && device.key() != expectedKey) {
+                Logger.w(TAG, "收到其他USB设备授权结果，已忽略: $deviceInfo")
+                return
             }
+
+            val reallyGranted = if (systemGranted && device != null && usbManager != null) {
+                hasPermission(usbManager, device)
+            } else {
+                false
+            }
+            val message = when {
+                reallyGranted -> "USB读卡器权限已授予: $deviceInfo"
+                device == null -> "USB授权回调缺少设备信息，且无法回退定位设备，授权视为失败: $deviceInfo"
+                !systemGranted -> "USB设备授权被拒绝: $deviceInfo"
+                else -> "系统返回授权成功，但 UsbManager 校验失败，请重新插拔后授权: $deviceInfo"
+            }
+
+            if (reallyGranted) Logger.i(TAG, message) else Logger.w(TAG, message)
+            permissionCallback?.invoke(PermissionResult(reallyGranted, message))
+            permissionCallback = null
         }
+    }
+
+    private fun getDeviceFromIntent(intent: Intent): UsbDevice? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.setExtrasClassLoader(UsbDevice::class.java.classLoader)
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+        }
+    } catch (e: Exception) {
+        Logger.e(TAG, "解析USB_DEVICE失败", e)
+        null
     }
 
     /**
@@ -63,49 +113,24 @@ object UsbPermissionHelper {
     }
 
     /**
-     * 验证 USB 读卡器权限：已授权直接返回 true，未授权则申请并返回包含真实原因的结果。
-     * 供前台 MainActivity 启动时调用，确保授权弹窗在前台弹出。
-     */
-    fun verifyReaderPermission(context: Context): PermissionResult {
-        val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
-            ?: return PermissionResult(false, "获取 UsbManager 失败")
-
-        // 先注册广播，确保能收到授权结果
-        register(context)
-
-        val device = findReaderDevice(context, usbManager)
-            ?: return PermissionResult(false, "未找到USB读卡器，请检查设备是否插入")
-
-        if (usbManager.hasPermission(device)) {
-            Logger.i(TAG, "USB读卡器已授权: ${device.deviceName}")
-            return PermissionResult(true, "USB读卡器权限已授予")
-        }
-
-        val requested = requestPermission(context, usbManager, device)
-        return PermissionResult(
-            false,
-            if (requested) "已发送USB授权请求，请在弹框中允许"
-            else "USB授权请求未发出（可能正在等待上次授权）"
-        )
-    }
-
-    /**
-     * 查找 USB 读卡器：优先用读卡库的方法，失败时回退遍历系统设备列表
+     * 查找 USB 读卡器：优先用读卡库匹配，失败时回退遍历系统设备列表。
+     * hcreader 库只认 VID=4292/PID=528，当前读卡器是 VID=4292/PID=5140，
+     * 但 OpenReader(device) 本身不校验 VID/PID，因此按 VID 回退即可绕过库匹配限制。
      */
     fun findReaderDevice(context: Context, usbManager: UsbManager): UsbDevice? {
         try {
             val card: Card = AndroidUSB(context, usbManager)
             card.GetUsbReader()?.let {
-                Logger.i(TAG, "读卡库找到USB设备: ${it.deviceName}")
+                Logger.i(
+                    TAG,
+                    "读卡库找到USB设备: ${it.deviceName} (VID=${it.vendorId}, PID=${it.productId})"
+                )
                 return it
             }
         } catch (e: Exception) {
             Logger.e(TAG, "读卡库查找USB设备异常", e)
         }
-        // 兜底：遍历系统 USB 设备列表（无需权限即可枚举）
-        // hcreader 库只认 VID=4292/PID=528，而当前读卡器是 VID=4292/PID=5140（CP210x 同系列）
-        // GetUsbReader() 的 isSupported 按死 PID 过滤导致返回 null，
-        // 但 OpenReader(device) 本身不校验 VID/PID，因此这里按 VID 匹配即可绕过。
+
         val devices = usbManager.deviceList.values.toList()
         if (devices.isEmpty()) {
             Logger.w(TAG, "系统USB设备列表为空，请检查设备是否插入")
@@ -114,11 +139,15 @@ object UsbPermissionHelper {
         devices.forEach {
             Logger.i(TAG, "枚举到USB设备: ${it.deviceName} (VID=${it.vendorId}, PID=${it.productId})")
         }
-        // 优先 VID+PID 精确匹配，其次 VID 匹配（CP210x 同系列不同 PID）
-        val reader = devices.firstOrNull { it.vendorId == SUPPORTED_VID && it.productId == SUPPORTED_PID }
-            ?: devices.firstOrNull { it.vendorId == SUPPORTED_VID }
+
+        val reader = devices.firstOrNull {
+            it.vendorId == SUPPORTED_VID && it.productId == SUPPORTED_PID
+        } ?: devices.firstOrNull { it.vendorId == SUPPORTED_VID }
         if (reader != null) {
-            Logger.i(TAG, "选定USB读卡器: ${reader.deviceName} (VID=${reader.vendorId}, PID=${reader.productId})")
+            Logger.i(
+                TAG,
+                "选定USB读卡器: ${reader.deviceName} (VID=${reader.vendorId}, PID=${reader.productId})"
+            )
         } else {
             Logger.w(TAG, "未找到 VID=$SUPPORTED_VID 的读卡器，退回第一个设备")
         }
@@ -127,6 +156,66 @@ object UsbPermissionHelper {
 
     private const val SUPPORTED_VID = 4292   // 0x10C4
     private const val SUPPORTED_PID = 528    // 0x0210 hcreader 库默认支持的 PID
+
+    /**
+     * 验证 USB 读卡器权限。
+     *
+     * 返回值只表示当前同步检查结果：
+     * - 已授权：granted=true；
+     * - 需要弹框：granted=false，最终允许/拒绝结果通过 [onResult] 回调返回。
+     *
+     * 供前台 MainActivity 调用，确保授权弹窗在前台弹出。
+     */
+    fun verifyReaderPermission(
+        context: Context,
+        onResult: ((PermissionResult) -> Unit)? = null
+    ): PermissionResult {
+        val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
+            ?: return PermissionResult(false, "获取 UsbManager 失败").also { clearPendingState() }
+
+        // 先注册广播，确保能收到授权结果
+        register(context)
+
+        val device: UsbDevice = findReaderDevice(context, usbManager) ?: run {
+            clearPendingState()
+            return PermissionResult(false, "未找到USB读卡器，请检查设备是否插入")
+        }
+
+        if (hasPermission(usbManager, device)) {
+            clearPendingState()
+            val message = "USB读卡器权限已授予: " +
+                    "${device.deviceName} (VID=${device.vendorId}, PID=${device.productId})"
+            Logger.i(TAG, message)
+            return PermissionResult(true, message)
+        }
+
+        if (requestingPermission) {
+            return PermissionResult(false, "USB授权请求已发出，请在弹框中允许")
+        }
+
+        permissionCallback = onResult
+        waitingDeviceKey = device.key()
+
+        val requested = requestPermission(context, usbManager, device)
+        if (!requested) {
+            if (hasPermission(usbManager, device)) {
+                clearPendingState()
+                return PermissionResult(true, "USB读卡器权限已授予")
+            }
+            clearPendingState()
+            return PermissionResult(false, "USB授权请求未发出，请确认 App 处于前台")
+        }
+
+        return PermissionResult(
+            false,
+            "已发送USB授权请求，请在弹框中允许；最终授权结果将通过回调返回"
+        )
+    }
+
+    private fun clearPendingState() {
+        permissionCallback = null
+        waitingDeviceKey = null
+    }
 
     /**
      * 请求 USB 设备权限

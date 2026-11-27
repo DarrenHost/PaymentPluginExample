@@ -49,7 +49,9 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.await
+import com.gs.payment.plugin.http.TokenManager
 import com.gs.payment.plugin.service.PaymentService
+import com.gs.payment.plugin.utils.DeviceUtils
 import com.gs.payment.plugin.utils.Logger
 import com.gs.payment.plugin.utils.UsbPermissionHelper
 import com.gs.payment.plugin.work.MonitoringWorker
@@ -102,6 +104,7 @@ class MainActivity : ComponentActivity() {
         
         // 启动MonitoringWorker（如果未启动）
         startMonitoringWorkerIfNeeded()
+        Logger.i(TAG, "uniqueCode: ${DeviceUtils.uniqueCode()}")
     }
 
     override fun onDestroy() {
@@ -124,7 +127,9 @@ class MainActivity : ComponentActivity() {
      * 前台验证 USB 读卡器权限：已授权直接用，未授权则弹出授权对话框
      */
     private fun verifyUsbPermission() {
-        val result = UsbPermissionHelper.verifyReaderPermission(this)
+        val result = UsbPermissionHelper.verifyReaderPermission(this) { permissionResult ->
+            addLogMessage(permissionResult.message)
+        }
         addLogMessage(result.message)
     }
 
@@ -204,6 +209,28 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Logger.e(TAG, "启动MonitoringWorker失败", e)
         }
+    }
+
+    /**
+     * 手动测试 OAuth token 请求
+     */
+    private fun requestToken() {
+        Logger.i(TAG, "开始请求Token")
+        addLogMessage("开始请求Token")
+        TokenManager.clearToken()
+        TokenManager.getToken(object : TokenManager.TokenCallback {
+            override fun onSuccess(token: String) {
+                val message = "Token请求成功，长度=${token.length}"
+                Logger.i(TAG, message)
+                addLogMessage(message)
+            }
+
+            override fun onFailure(errorMessage: String) {
+                val message = "Token请求失败: $errorMessage"
+                Logger.e(TAG, message)
+                addLogMessage(message)
+            }
+        })
     }
 
     /**
@@ -333,6 +360,21 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            requestToken()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Request Token")
                     }
                 }
 

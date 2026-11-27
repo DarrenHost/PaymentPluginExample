@@ -3,8 +3,6 @@ package com.gs.payment.plugin.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import com.gs.payment.plugin.utils.Logger
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -19,23 +17,28 @@ import java.util.concurrent.TimeUnit
  * @date 2026/1/4 11:33
  */
 class BootReceiver : BroadcastReceiver() {
+    companion object {
+        private const val TAG = "BootReceiver"
+        private const val ACTION_QUICKBOOT_POWERON = "android.intent.action.QUICKBOOT_POWERON"
+    }
+
     override fun onReceive(context: Context?, intent: Intent?) {
-        if (intent?.action == Intent.ACTION_BOOT_COMPLETED || 
-            intent?.action == "android.intent.action.QUICKBOOT_POWERON") {
-            if (context == null) {
-                return
-            }
-            Logger.i("BootReceiver", "开机启动，等待10秒后启动服务")
+        val action = intent?.action ?: return
+        if (action != Intent.ACTION_BOOT_COMPLETED && action != ACTION_QUICKBOOT_POWERON) return
 
-            // 延时10秒启动PaymentService
-            Handler(Looper.getMainLooper()).postDelayed({
-                PaymentService.start(context)
-                Logger.i("BootReceiver", "开机后延时10秒启动PaymentService")
-            }, 10000)
+        val appContext = context?.applicationContext ?: return
+        Logger.i(TAG, "开机启动，立即启动PaymentService")
 
-            // 启动WorkManager周期性检查任务
-            startMonitoring(context)
+        // BroadcastReceiver 生命周期很短，Handler 延时任务会随进程被回收而丢失，
+        // 因此这里必须立即启动服务；监控任务用 WorkManager 延迟执行。
+        try {
+            PaymentService.start(appContext)
+            Logger.i(TAG, "开机后已启动PaymentService")
+        } catch (e: Exception) {
+            Logger.e(TAG, "开机启动PaymentService失败", e)
         }
+
+        startMonitoring(appContext)
     }
 
     private fun startMonitoring(context: Context) {
@@ -49,6 +52,6 @@ class BootReceiver : BroadcastReceiver() {
             ExistingPeriodicWorkPolicy.KEEP,
             request
         )
-        Logger.i("BootReceiver", "启动MonitoringWorker监控任务")
+        Logger.i(TAG, "启动MonitoringWorker监控任务")
     }
 }
